@@ -15,10 +15,8 @@ load_dotenv()  # Load environment variables from .env file
 JsonDict = dict[str, Any]
 
 
-### Configuration class
-## This is the default configuration for the Hevy API client. The user can create a custom configuration by subclassing this class or by passing a custom instance.
-class HevyConfig:
-    """Default configuration for Hevy API client."""
+class HevyOAuthConfig:
+    """Configuration for Hevy's OAuth/free API endpoints."""
 
     def __init__(self):
         self.base_url: str = "https://api.hevyapp.com"
@@ -57,24 +55,31 @@ class HevyConfig:
         return f"{self.base_url}/workout_count"
 
     @property
-    def pro_workouts_url(self) -> str:
+    def body_measurements_url(self) -> str:
+        return f"{self.base_url}/body_measurements"
+
+
+class HevyAPIKeyConfig:
+    """Configuration for Hevy's API-key endpoints."""
+
+    def __init__(self):
+        self.base_url: str = "https://api.hevyapp.com"
+
+    @property
+    def workouts_url(self) -> str:
         return f"{self.base_url}/v1/workouts"
 
     @property
-    def pro_workout_count_url(self) -> str:
+    def workout_count_url(self) -> str:
         return f"{self.base_url}/v1/workouts/count"
 
     @property
-    def pro_user_info_url(self) -> str:
+    def user_info_url(self) -> str:
         return f"{self.base_url}/v1/user/info"
 
     @property
-    def pro_body_measurements_url(self) -> str:
-        return f"{self.base_url}/v1/body_measurements"
-
-    @property
     def body_measurements_url(self) -> str:
-        return f"{self.base_url}/body_measurements"
+        return f"{self.base_url}/v1/body_measurements"
 
 
 ### Main OAuth/free API client class
@@ -83,9 +88,9 @@ class HevyOAuthClient:
     Client for Hevy's OAuth/free API used by username/password login.
     """
 
-    def __init__(self, access_token: str | None = None, config: HevyConfig | None = None):
+    def __init__(self, access_token: str | None = None, config: HevyOAuthConfig | None = None):
         self.access_token = access_token  # OAuth2 access token
-        self.config = config or HevyConfig()
+        self.config = config or HevyOAuthConfig()
         self.session = requests.Session()
 
         if access_token:
@@ -512,9 +517,9 @@ class HevyOAuthClient:
 class HevyAPIKeyClient:
     """Client for Hevy's API-key endpoints."""
 
-    def __init__(self, api_key: str, config: HevyConfig | None = None):
+    def __init__(self, api_key: str, config: HevyAPIKeyConfig | None = None):
         self.api_key = api_key
-        self.config = config or HevyConfig()
+        self.config = config or HevyAPIKeyConfig()
         self.session = requests.Session()
         self.session.headers.update({"Content-Type": "application/json", "api-key": self.api_key})
 
@@ -525,7 +530,7 @@ class HevyAPIKeyClient:
         logging.debug("Fetching API-key user information...")
 
         try:
-            response = self.session.get(self.config.pro_user_info_url, timeout=30)
+            response = self.session.get(self.config.user_info_url, timeout=30)
             response.raise_for_status()
 
             data = cast(JsonDict, response.json())
@@ -559,7 +564,7 @@ class HevyAPIKeyClient:
         while True:
             try:
                 response = self.session.get(
-                    self.config.pro_body_measurements_url,
+                    self.config.body_measurements_url,
                     params={"page": page, "pageSize": page_size},
                     timeout=30,
                 )
@@ -596,7 +601,7 @@ class HevyAPIKeyClient:
 
         try:
             response = self.session.post(
-                self.config.pro_body_measurements_url,
+                self.config.body_measurements_url,
                 json={"date": date, "weight_kg": weight_kg},
                 timeout=30,
             )
@@ -636,7 +641,7 @@ class HevyAPIKeyClient:
         params = {"page": page, "pageSize": page_size}
 
         try:
-            response = self.session.get(self.config.pro_workouts_url, params=params, timeout=30)
+            response = self.session.get(self.config.workouts_url, params=params, timeout=30)
             response.raise_for_status()
 
             data = cast(JsonDict, response.json())
@@ -713,7 +718,7 @@ class HevyAPIKeyClient:
             raise HevyError("No PRO API key available. Please use a Hevy PRO API key.")
 
         try:
-            response = self.session.get(self.config.pro_workout_count_url, timeout=30)
+            response = self.session.get(self.config.workout_count_url, timeout=30)
             response.raise_for_status()
 
             count = _extract_workout_count(response.json())
@@ -748,7 +753,7 @@ class HevyAPIKeyClient:
 
         try:
             ### Try to fetch a single workout to validate the key
-            response = self.session.get(self.config.pro_workouts_url, params={"page": 1, "pageSize": 1})
+            response = self.session.get(self.config.workouts_url, params={"page": 1, "pageSize": 1})
 
             is_valid = response.status_code == 200
             logging.debug(f"PRO API key validation result: {is_valid}")
