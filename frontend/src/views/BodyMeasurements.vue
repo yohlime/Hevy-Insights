@@ -14,7 +14,7 @@ import {
   Legend,
   Filler
 } from "chart.js";
-import { bodyMeasurementService, authService } from "../services/api";
+import { bodyMeasurementService } from "../services/api";
 import { formatWeightPrecise, getWeightUnit, formatDate } from "../utils/formatters";
 import { useHevyCache } from "../stores/hevy_cache";
 
@@ -74,9 +74,6 @@ const today = new Date().toISOString().split("T")[0];
 
 // Computed Properties
 const userAccount = computed(() => store.userAccount);
-
-// Check if user is using PRO API key
-const isUsingProApi = ref<boolean>(false);
 
 const sortedMeasurements = computed(() => {
   return [...measurements.value].sort((a, b) => {
@@ -494,10 +491,6 @@ const getChangeClass = (index: number) => {
 
 // Lifecycle
 onMounted(async () => {
-  // Check auth mode from backend
-  const authStatus = await authService.getAuthStatus();
-  isUsingProApi.value = authStatus.auth_mode === "api_key";
-  
   await store.fetchUserAccount();
   loadMeasurements();
 });
@@ -516,7 +509,7 @@ onMounted(async () => {
         </div>
         <div class="header-actions">
           <!-- Add Measurement Button -->
-          <button class="add-btn" @click="showAddModal = true" :disabled="isUsingProApi">
+          <button class="add-btn" @click="showAddModal = true">
             + {{ t("bodyMeasurements.addMeasurement") }}
           </button>
 
@@ -528,23 +521,14 @@ onMounted(async () => {
           <!-- User Badge -->
           <div v-if="userAccount" class="user-badge" @click="router.push('/profile')" title="View Profile">
             <div class="user-avatar">
-              {{ userAccount.username?.[0]?.toUpperCase()}}
+              {{ store.userInitial }}
             </div>
             <div class="user-details">
-              <strong>{{ userAccount.username }}</strong>
-              <span>{{ userAccount.email }}</span>
+              <strong>{{ store.userDisplayName }}</strong>
+              <span v-if="store.userEmail">{{ store.userEmail }}</span>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- PRO API Warning Banner -->
-    <div v-if="isUsingProApi" class="pro-api-warning">
-      <div class="warning-icon">⚠️</div>
-      <div class="warning-content">
-        <strong>{{ t("bodyMeasurements.proApiWarning.title") }}</strong>
-        <p>{{ t("bodyMeasurements.proApiWarning.message") }}</p>
       </div>
     </div>
 
@@ -557,7 +541,7 @@ onMounted(async () => {
     <!-- Error State -->
     <div v-else-if="error" class="error-container">
       <p>{{ error }}</p>
-      <button v-if="!isUsingProApi" class="btn-secondary" @click="loadMeasurements">{{ t("global.sw.retry") }}</button>
+      <button class="btn-secondary" @click="loadMeasurements">{{ t("global.sw.retry") }}</button>
     </div>
 
     <!-- Main Content -->

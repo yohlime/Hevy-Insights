@@ -1035,7 +1035,7 @@ onMounted(() => {
       <div class="header-content">
         <div class="title-section">
           <h1>{{ $t('dashboard.title') }}</h1>
-          <p v-if="userAccount" class="subtitle">{{ $t('dashboard.subtitle')}}, {{ userAccount.username }}!</p>
+          <p v-if="userAccount" class="subtitle">{{ $t('dashboard.subtitle')}}, {{ store.userDisplayName }}!</p>
         </div>
 
         <div class="header-actions">
@@ -1046,10 +1046,10 @@ onMounted(() => {
           
           <!-- User Badge -->
           <div v-if="userAccount" class="user-badge" @click="router.push('/profile')" title="View Profile">
-            <div class="user-avatar">{{ userAccount.username.charAt(0).toUpperCase() }}</div>
+            <div class="user-avatar">{{ store.userInitial }}</div>
             <div class="user-details">
-              <strong>{{ userAccount.username }}</strong>
-              <span>{{ userAccount.email }}</span>
+              <strong>{{ store.userDisplayName }}</strong>
+              <span v-if="store.userEmail">{{ store.userEmail }}</span>
             </div>
           </div>
         </div>

@@ -485,8 +485,8 @@ class HevyAPIKeyClient:
     ### ========== Hevy API-key Methods ==========
 
     def get_user_account(self) -> JsonDict:
-        """Fetch authenticated PRO user information."""
-        logging.debug("Fetching PRO user information...")
+        """Fetch authenticated API-key user information."""
+        logging.debug("Fetching API-key user information...")
 
         try:
             response = self.session.get(self.config.pro_user_info_url, timeout=30)
@@ -495,25 +495,21 @@ class HevyAPIKeyClient:
             data = cast(JsonDict, response.json())
             user_data = data.get("data")
             if isinstance(user_data, dict):
-                return {
-                    **user_data,
-                    "username": user_data.get("name"),
-                    "email": None,
-                }
+                return user_data
             return data
 
         except requests.JSONDecodeError as e:
-            logging.error(f"JSON decode error fetching PRO user info: {e}")
+            logging.error(f"JSON decode error fetching API-key user info: {e}")
             raise HevyError(f"JSON decode error occurred: {e}")
         except requests.HTTPError as e:
-            logging.error(f"HTTP error fetching PRO user info: {e}")
+            logging.error(f"HTTP error fetching API-key user info: {e}")
             if e.response.status_code == 401:
                 raise HevyError("Unauthorized - Invalid API key")
             if e.response.status_code == 404:
                 raise HevyError("User not found")
             raise HevyError(f"HTTP error occurred: {e}")
         except requests.RequestException as e:
-            logging.error(f"Request error fetching PRO user info: {e}")
+            logging.error(f"Request error fetching API-key user info: {e}")
             raise HevyError(f"Request error occurred: {e}")
 
     def get_body_measurements(self) -> list[JsonDict]:

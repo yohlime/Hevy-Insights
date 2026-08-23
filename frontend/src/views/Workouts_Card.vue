@@ -154,10 +154,10 @@ onMounted(async () => {
           
           <!-- User Badge -->
           <div v-if="userAccount" class="user-badge" @click="$router.push('/profile')" title="View Profile">
-            <div class="user-avatar">{{ userAccount.username.charAt(0).toUpperCase() }}</div>
+            <div class="user-avatar">{{ store.userInitial }}</div>
             <div class="user-details">
-              <strong>{{ userAccount.username }}</strong>
-              <span>{{ userAccount.email }}</span>
+              <strong>{{ store.userDisplayName }}</strong>
+              <span v-if="store.userEmail">{{ store.userEmail }}</span>
             </div>
           </div>
         </div>

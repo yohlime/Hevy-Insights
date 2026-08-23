@@ -2,8 +2,11 @@ import { defineStore } from "pinia";
 import { userService, workoutService, authService } from "../services/api";
 
 interface UserAccount {
-  username: string;
-  email: string;
+  id?: string | number;
+  username?: string | null;
+  name?: string | null;
+  email?: string | null;
+  url?: string | null;
   [key: string]: any;
 }
 
@@ -54,9 +57,21 @@ export const useHevyCache = defineStore("hevyCache", {
       if (state.dataSource === "csv") {
         return "CSV User";
       }
-      // Username comes from user account or is null
-      return state.userAccount?.username || null;
+      return state.userAccount?.username || state.userAccount?.name || null;
     },
+    userDisplayName: (state) => {
+      if (state.dataSource === "csv") {
+        return "CSV User";
+      }
+      return state.userAccount?.username || state.userAccount?.name || "User";
+    },
+    userInitial: (state) => {
+      const name = state.dataSource === "csv"
+        ? "CSV User"
+        : state.userAccount?.username || state.userAccount?.name || "User";
+      return name.charAt(0).toUpperCase();
+    },
+    userEmail: (state) => state.userAccount?.email || "",
     hasWorkouts: (state) => state.workouts.length > 0,
     isCSVMode: (state) => state.dataSource === "csv",
     // Cache workouts for 5 minutes (API only)
@@ -79,23 +94,6 @@ export const useHevyCache = defineStore("hevyCache", {
           };
         }
         return this.userAccount;
-      }
-
-      // Check auth mode from backend to handle Hevy PRO API key mode
-      try {
-        const authStatus = await authService.getAuthStatus();
-        if (authStatus.auth_mode === "api_key") {
-          // In Hevy PROAPI key mode, create a mock user account (no username endpoint in PRO API)
-          if (!this.userAccount || force) {
-            this.userAccount = {
-              username: "PRO User",
-              email: "pro@hevy.app",
-            };
-          }
-          return this.userAccount;
-        }
-      } catch (error) {
-        console.error("Failed to check auth status:", error);
       }
 
       if (this.userAccount && !force) return this.userAccount;

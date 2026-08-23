@@ -294,10 +294,10 @@ onMounted(() => {
           
           <!-- User Badge -->
           <div v-if="userAccount" class="user-badge" @click="router.push('/profile')">
-            <div class="user-avatar">{{ userAccount.username?.charAt(0).toUpperCase() }}</div>
+            <div class="user-avatar">{{ store.userInitial }}</div>
             <div class="user-details">
-              <strong>{{ userAccount.username }}</strong>
-              <span>{{ userAccount.email }}</span>
+              <strong>{{ store.userDisplayName }}</strong>
+              <span v-if="store.userEmail">{{ store.userEmail }}</span>
             </div>
           </div>
         </div>
@@ -374,7 +374,7 @@ onMounted(() => {
                 </div>
                 <div class="card-content">
                   <div class="card-header-text">
-                    <span class="username">{{ userAccount?.username }}</span>
+                    <span class="username">{{ store.userDisplayName }}</span>
                     <span class="platform">Hevy Insights</span>
                   </div>
                   <div class="card-stat">
@@ -412,7 +412,7 @@ onMounted(() => {
                 </div>
                 <div class="card-content">
                   <div class="card-header-text">
-                    <span class="username">{{ userAccount?.username }}</span>
+                    <span class="username">{{ store.userDisplayName }}</span>
                     <span class="platform">Hevy Insights</span>
                   </div>
                   <div class="card-stat">
@@ -450,7 +450,7 @@ onMounted(() => {
                 </div>
                 <div class="card-content">
                   <div class="card-header-text">
-                    <span class="username">{{ userAccount?.username }}</span>
+                    <span class="username">{{ store.userDisplayName }}</span>
                     <span class="platform">Hevy Insights</span>
                   </div>
                   <div class="card-stat">
@@ -488,7 +488,7 @@ onMounted(() => {
                 </div>
                 <div class="card-content">
                   <div class="card-header-text">
-                    <span class="username">{{ userAccount?.username }}</span>
+                    <span class="username">{{ store.userDisplayName }}</span>
                     <span class="platform">Hevy Insights</span>
                   </div>
                   <div class="card-stat">
@@ -526,7 +526,7 @@ onMounted(() => {
                 </div>
                 <div class="card-content">
                   <div class="card-header-text">
-                    <span class="username">{{ userAccount?.username }}</span>
+                    <span class="username">{{ store.userDisplayName }}</span>
                     <span class="platform">Hevy Insights</span>
                   </div>
                   <div class="card-stat">
@@ -575,7 +575,7 @@ onMounted(() => {
                 </div>
                 <div class="card-content">
                   <div class="card-header-text">
-                    <span class="username">{{ userAccount?.username }}</span>
+                    <span class="username">{{ store.userDisplayName }}</span>
                     <span class="platform">Hevy Insights</span>
                   </div>
                   <div class="wrapped-header">

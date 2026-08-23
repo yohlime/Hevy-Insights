@@ -129,21 +129,21 @@ onMounted(async () => {
                 <img 
                   v-if="userAccount?.profile_pic" 
                   :src="userAccount.profile_pic" 
-                  :alt="userAccount.username"
+                  :alt="store.userDisplayName"
                   class="profile-avatar-large"
                 />
                 <div v-else class="profile-avatar-large profile-avatar-placeholder">
-                  {{ userAccount?.username?.[0]?.toUpperCase() || "U" }}
+                  {{ store.userInitial }}
                 </div>
               </div>
               <div class="profile-details">
                 <div class="detail-row">
                   <span class="detail-label">{{ t('profile.userInfo.username') }}</span>
-                  <span class="detail-value">{{ userAccount?.username || "-" }}</span>
+                  <span class="detail-value">{{ store.userDisplayName }}</span>
                 </div>
                 <div class="detail-row">
                   <span class="detail-label">{{ t('profile.userInfo.email') }}</span>
-                  <span class="detail-value">{{ userAccount?.email || "-" }}</span>
+                  <span class="detail-value">{{ store.userEmail || "-" }}</span>
                 </div>
                 <div class="detail-row" v-if="userAccount?.birthday">
                   <span class="detail-label">{{ t('profile.userInfo.birthday') }}</span>
