@@ -53,8 +53,16 @@ class HevyConfig:
         return f"{self.base_url}/user_workouts_paged"
 
     @property
+    def workout_count_url(self) -> str:
+        return f"{self.base_url}/workout_count"
+
+    @property
     def pro_workouts_url(self) -> str:
         return f"{self.base_url}/v1/workouts"
+
+    @property
+    def pro_workout_count_url(self) -> str:
+        return f"{self.base_url}/v1/workouts/count"
 
     @property
     def pro_user_info_url(self) -> str:
@@ -391,6 +399,34 @@ class HevyOAuthClient:
             logging.error(f"Unexpected error fetching workouts: {e}")
             raise HevyError(f"Unexpected error occurred: {e}")
 
+    def get_workout_count(self, username: str) -> int:
+        """Fetch total OAuth workout count for a user."""
+        logging.debug(f"Fetching workout count ({username=})")
+
+        if not self.access_token:
+            raise HevyError("No access token available. Please login first.")
+
+        try:
+            response = self.session.get(self.config.workout_count_url, params={"username": username}, timeout=30)
+            response.raise_for_status()
+
+            count = _extract_workout_count(response.json())
+            if count is None:
+                raise HevyError("Workout count response missing count")
+            return count
+
+        except requests.JSONDecodeError as e:
+            logging.error(f"JSON decode error fetching workout count: {e}")
+            raise HevyError(f"JSON decode error occurred: {e}")
+        except requests.HTTPError as e:
+            logging.error(f"HTTP error fetching workout count: {e}")
+            if e.response.status_code == 401:
+                raise HevyError("Unauthorized - Invalid or expired access token")
+            raise HevyError(f"HTTP error occurred: {e}")
+        except requests.RequestException as e:
+            logging.error(f"Request error fetching workout count: {e}")
+            raise HevyError(f"Request error occurred: {e}")
+
     def get_body_measurements(self) -> list[JsonDict]:
         """
         Fetch body measurements from Hevy API.
@@ -669,6 +705,34 @@ class HevyAPIKeyClient:
             logging.error(f"Unexpected error fetching PRO workouts: {e}")
             raise HevyError(f"Unexpected error occurred: {e}")
 
+    def get_workout_count(self) -> int:
+        """Fetch total workout count from the API-key endpoint."""
+        logging.debug("Fetching API-key workout count")
+
+        if not self.api_key:
+            raise HevyError("No PRO API key available. Please use a Hevy PRO API key.")
+
+        try:
+            response = self.session.get(self.config.pro_workout_count_url, timeout=30)
+            response.raise_for_status()
+
+            count = _extract_workout_count(response.json())
+            if count is None:
+                raise HevyError("Workout count response missing count")
+            return count
+
+        except requests.JSONDecodeError as e:
+            logging.error(f"JSON decode error fetching API-key workout count: {e}")
+            raise HevyError(f"JSON decode error occurred: {e}")
+        except requests.HTTPError as e:
+            logging.error(f"HTTP error fetching API-key workout count: {e}")
+            if e.response.status_code == 401:
+                raise HevyError("Unauthorized - Invalid API key")
+            raise HevyError(f"HTTP error occurred: {e}")
+        except requests.RequestException as e:
+            logging.error(f"Request error fetching API-key workout count: {e}")
+            raise HevyError(f"Request error occurred: {e}")
+
     def validate_api_key(self) -> bool:
         """
         Validate the Hevy PRO API key by attempting to fetch a single workout.
@@ -702,3 +766,23 @@ class HevyError(Exception):
     """Custom error for Hevy API operations."""
 
     pass
+
+
+def _extract_workout_count(data: Any) -> int | None:
+    if isinstance(data, bool):
+        return None
+    if isinstance(data, int):
+        return data
+    if isinstance(data, float):
+        return int(data)
+    if isinstance(data, str) and data.isdigit():
+        return int(data)
+    if not isinstance(data, dict):
+        return None
+
+    for key in ("workout_count", "workouts_count", "count", "total", "total_count"):
+        count = _extract_workout_count(data.get(key))
+        if count is not None:
+            return count
+
+    return _extract_workout_count(data.get("data"))

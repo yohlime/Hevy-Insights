@@ -115,9 +115,11 @@ def get_workouts(
 def _sync_oauth_workouts(*, client: Any, username: str, account_key: str) -> None:
     source = "oauth"
     stop_on_existing = is_workout_sync_complete(source=source, account_key=account_key)
+    workout_count = _workout_count_or_none(client=client, username=username)
+    page_limit = _sync_page_limit(workout_count=workout_count, page_size=OAUTH_WORKOUT_PAGE_SIZE)
 
-    offset = 0
-    for _ in range(MAX_WORKOUT_SYNC_PAGES):
+    for page_index in range(page_limit):
+        offset = page_index * OAUTH_WORKOUT_PAGE_SIZE
         response = client.get_workouts(username=username, offset=offset)
         workouts = _workouts_from_response(response)
         found_existing = store_workouts(source=source, account_key=account_key, workouts=workouts)
@@ -129,16 +131,16 @@ def _sync_oauth_workouts(*, client: Any, username: str, account_key: str) -> Non
             mark_workout_sync(source=source, account_key=account_key, fully_synced=True)
             return
 
-        offset += OAUTH_WORKOUT_PAGE_SIZE
-
-    mark_workout_sync(source=source, account_key=account_key, fully_synced=False)
+    mark_workout_sync(source=source, account_key=account_key, fully_synced=workout_count is not None)
 
 
 def _sync_api_key_workouts(*, client: Any, account_key: str, page_size: int) -> None:
     source = "api_key"
     stop_on_existing = is_workout_sync_complete(source=source, account_key=account_key)
+    workout_count = _workout_count_or_none(client=client)
+    page_limit = _sync_page_limit(workout_count=workout_count, page_size=page_size)
 
-    for page in range(1, MAX_WORKOUT_SYNC_PAGES + 1):
+    for page in range(1, page_limit + 1):
         response = client.get_workouts(page=page, page_size=page_size)
         workouts = _workouts_from_response(response)
         found_existing = store_workouts(source=source, account_key=account_key, workouts=workouts)
@@ -150,7 +152,25 @@ def _sync_api_key_workouts(*, client: Any, account_key: str, page_size: int) -> 
             mark_workout_sync(source=source, account_key=account_key, fully_synced=True)
             return
 
-    mark_workout_sync(source=source, account_key=account_key, fully_synced=False)
+    mark_workout_sync(source=source, account_key=account_key, fully_synced=workout_count is not None)
+
+
+def _workout_count_or_none(*, client: Any, username: str | None = None) -> int | None:
+    try:
+        if username is not None:
+            return client.get_workout_count(username=username)
+        return client.get_workout_count()
+    except HevyError as e:
+        logging.warning(f"Workout count unavailable; falling back to empty-page sync: {e}")
+        return None
+
+
+def _sync_page_limit(*, workout_count: int | None, page_size: int) -> int:
+    if workout_count is None:
+        return MAX_WORKOUT_SYNC_PAGES
+    if workout_count <= 0:
+        return 0
+    return min(MAX_WORKOUT_SYNC_PAGES, (workout_count + page_size - 1) // page_size)
 
 
 def _workouts_from_response(response: dict[str, Any]) -> list[dict[str, Any]]:
