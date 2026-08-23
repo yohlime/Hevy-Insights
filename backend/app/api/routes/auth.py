@@ -121,19 +121,30 @@ def refresh_token(
         raise HTTPException(status_code=401, detail="No refresh credentials found. Please login again.")
 
     try:
-        if auth_session and auth_session.saved_account_secret:
+        user = None
+
+        if hevy_refresh_token:
+            client = HevyOAuthClient(access_token=hevy_access_token)
+            try:
+                user = client.refresh_access_token(
+                    refresh_token=hevy_refresh_token,
+                )
+                if auth_session:
+                    update_auth_session_tokens(auth_session.session_id, user)
+            except HevyError:
+                if not auth_session or not auth_session.saved_account_secret:
+                    raise
+                logging.info("Refresh-token flow failed; falling back to saved-account login")
+
+        if user is None and auth_session and auth_session.saved_account_secret:
             client = HevyOAuthClient()
             user = client.login_with_saved_account(
                 user_id=auth_session.user_id,
                 secret=auth_session.saved_account_secret,
             )
             update_auth_session_tokens(auth_session.session_id, user)
-        elif hevy_refresh_token:
-            client = HevyOAuthClient()
-            user = client.refresh_access_token(
-                refresh_token=hevy_refresh_token,
-            )
-        else:
+
+        if user is None:
             raise HTTPException(status_code=401, detail="No saved-account secret found. Please login again.")
 
         refresh_token_value = user.refresh_token or hevy_refresh_token

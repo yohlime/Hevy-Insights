@@ -32,7 +32,7 @@ class HevyOAuthConfig:
     @property
     def refresh_token_url(self) -> str:
         """OAuth2 token refresh endpoint."""
-        return f"{self.base_url}/refresh_token"
+        return f"{self.base_url}/auth/refresh_token"
 
     @property
     def create_saved_account_url(self) -> str:
@@ -275,6 +275,8 @@ class HevyOAuthClient:
         logging.debug("Refreshing OAuth2 access token...")
 
         headers = {"x-api-key": self.config.x_api_key, "Content-Type": "application/json", "Hevy-Platform": "web"}
+        if self.access_token:
+            headers["Authorization"] = f"Bearer {self.access_token}"
 
         body = {"refresh_token": refresh_token}
 
@@ -285,21 +287,21 @@ class HevyOAuthClient:
             data = cast(JsonDict, response.json())
 
             ### Extract response and validate
-            access_token = data.get("access_token") or data.get("auth_token")  # fallback
+            new_access_token = data.get("access_token") or data.get("auth_token")  # fallback
             new_refresh_token = data.get("refresh_token")
 
             ### Validate response
-            if not access_token or not new_refresh_token:
+            if not new_access_token or not new_refresh_token:
                 logging.error(f"Missing access/refresh token in response. Keys: {list(data.keys())}")
                 raise HevyError("Login response missing access/refresh token")
 
             ### Update client's access token and headers after successful login
-            self.access_token = access_token
+            self.access_token = new_access_token
             self._update_headers()
             user_id = data.get("user_id")
 
             return HevyUser(
-                access_token=access_token,
+                access_token=new_access_token,
                 user_id=user_id if isinstance(user_id, str) else "",
                 refresh_token=new_refresh_token,
                 expires_at=data.get("expires_at"),
