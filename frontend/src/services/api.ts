@@ -5,6 +5,12 @@ import {
   bodyMeasurementResponseSchema,
   bodyMeasurementsSchema,
   loginResponseSchema,
+  routineDetailResponseSchema,
+  routineFolderMutationResponseSchema,
+  routineFolderResponseSchema,
+  routineFoldersResponseSchema,
+  routineMutationResponseSchema,
+  routineResponseSchema,
   userAccountSchema,
   validateApiKeyResponseSchema,
   versionCheckResponseSchema,
@@ -108,6 +114,49 @@ export const bodyMeasurementService = {
   async addMeasurement(data: { weight_kg: number; date: string }): Promise<any> {
     const response = await api.post("/body_measurements_batch", data);
     return parseApiResponse(bodyMeasurementResponseSchema, response.data, "/body_measurements_batch");
+  },
+};
+
+// Routine Service
+export const routineService = {
+  async createFolder(title: string): Promise<any> {
+    const response = await api.post("/routine_folders", { folder: { title } });
+    return parseApiResponse(routineFolderResponseSchema, response.data, "/routine_folders");
+  },
+
+  async getFolders(): Promise<any> {
+    const response = await api.get("/routine_folders");
+    return parseApiResponse(routineFoldersResponseSchema, response.data, "/routine_folders");
+  },
+
+  async updateFolder(folderId: string, title: string): Promise<any> {
+    const response = await api.put(`/routine_folders/${folderId}`, { title });
+    return parseApiResponse(routineFolderMutationResponseSchema, response.data, `/routine_folders/${folderId}`);
+  },
+
+  async deleteFolder(folderId: string): Promise<any> {
+    const response = await api.delete(`/routine_folders/${folderId}`);
+    return parseApiResponse(routineFolderMutationResponseSchema, response.data, `/routine_folders/${folderId}`);
+  },
+
+  async createRoutine(routine: Record<string, unknown>): Promise<any> {
+    const response = await api.post("/routines", { routine });
+    return parseApiResponse(routineResponseSchema, response.data, "/routines");
+  },
+
+  async getRoutine(routineId: string): Promise<any> {
+    const response = await api.get(`/routines/${routineId}`);
+    return parseApiResponse(routineDetailResponseSchema, response.data, `/routines/${routineId}`);
+  },
+
+  async updateRoutine(routineId: string, routine: Record<string, unknown>): Promise<any> {
+    const response = await api.put(`/routines/${routineId}`, { routine });
+    return parseApiResponse(routineMutationResponseSchema, response.data, `/routines/${routineId}`);
+  },
+
+  async deleteRoutine(routineId: string): Promise<any> {
+    const response = await api.delete(`/routines/${routineId}`);
+    return parseApiResponse(routineMutationResponseSchema, response.data, `/routines/${routineId}`);
   },
 };
 

@@ -58,6 +58,18 @@ class HevyOAuthConfig:
     def body_measurements_url(self) -> str:
         return f"{self.base_url}/body_measurements"
 
+    @property
+    def routine_folder_url(self) -> str:
+        return f"{self.base_url}/routine_folder"
+
+    @property
+    def routine_folders_url(self) -> str:
+        return f"{self.base_url}/routine_folders"
+
+    @property
+    def routine_url(self) -> str:
+        return f"{self.base_url}/routine"
+
 
 class HevyAPIKeyConfig:
     """Configuration for Hevy's API-key endpoints."""
@@ -514,6 +526,280 @@ class HevyOAuthClient:
         except Exception as e:
             logging.error(f"Unexpected error posting body measurements: {e}")
             raise HevyError(f"Unexpected error occurred: {e}")
+
+    def create_routine_folder(self, title: str) -> JsonDict:
+        """Create a routine folder for the authenticated OAuth user."""
+        logging.debug("Creating routine folder")
+
+        if not self.access_token:
+            raise HevyError("No access token available. Please login first.")
+
+        headers = {
+            "x-api-key": self.config.x_api_key,
+            "Content-Type": "application/json",
+            "Hevy-Platform": "web",
+            "auth-token": self.access_token,
+            "Authorization": f"Bearer {self.access_token}",
+        }
+        body = {"folder": {"title": title}}
+        params = {"sendSyncEventToMobileApp": "true"}
+
+        try:
+            response = self.session.post(self.config.routine_folder_url, headers=headers, params=params, json=body, timeout=30)
+            response.raise_for_status()
+            return cast(JsonDict, response.json())
+
+        except requests.JSONDecodeError as e:
+            logging.error(f"JSON decode error creating routine folder: {e}")
+            raise HevyError(f"JSON decode error occurred: {e}")
+        except requests.HTTPError as e:
+            logging.error(f"HTTP error creating routine folder: {e}")
+            if e.response.status_code == 401:
+                raise HevyError("Unauthorized - Invalid or expired access token")
+            raise HevyError(f"HTTP error occurred: {e}")
+        except requests.RequestException as e:
+            logging.error(f"Request error creating routine folder: {e}")
+            raise HevyError(f"Request error occurred: {e}")
+
+    def get_routine_folders(self) -> JsonDict:
+        """Fetch routine folders for the authenticated OAuth user."""
+        logging.debug("Fetching routine folders")
+
+        if not self.access_token:
+            raise HevyError("No access token available. Please login first.")
+
+        headers = {
+            "x-api-key": self.config.x_api_key,
+            "Content-Type": "application/json",
+            "Hevy-Platform": "web",
+            "auth-token": self.access_token,
+            "Authorization": f"Bearer {self.access_token}",
+        }
+
+        try:
+            response = self.session.get(self.config.routine_folders_url, headers=headers, timeout=30)
+            response.raise_for_status()
+            return cast(JsonDict, response.json())
+
+        except requests.JSONDecodeError as e:
+            logging.error(f"JSON decode error fetching routine folders: {e}")
+            raise HevyError(f"JSON decode error occurred: {e}")
+        except requests.HTTPError as e:
+            logging.error(f"HTTP error fetching routine folders: {e}")
+            if e.response.status_code == 401:
+                raise HevyError("Unauthorized - Invalid or expired access token")
+            raise HevyError(f"HTTP error occurred: {e}")
+        except requests.RequestException as e:
+            logging.error(f"Request error fetching routine folders: {e}")
+            raise HevyError(f"Request error occurred: {e}")
+
+    def update_routine_folder(self, folder_id: str, title: str) -> JsonDict:
+        """Update a routine folder for the authenticated OAuth user."""
+        logging.debug(f"Updating routine folder: {folder_id}")
+
+        if not self.access_token:
+            raise HevyError("No access token available. Please login first.")
+
+        headers = {
+            "x-api-key": self.config.x_api_key,
+            "Content-Type": "application/json",
+            "Hevy-Platform": "web",
+            "auth-token": self.access_token,
+            "Authorization": f"Bearer {self.access_token}",
+        }
+        body = {"folderId": folder_id, "title": title}
+        params = {"sendSyncEventToMobileApp": "true"}
+
+        try:
+            response = self.session.put(self.config.routine_folder_url, headers=headers, params=params, json=body, timeout=30)
+            response.raise_for_status()
+            if not response.text.strip():
+                return {"folderId": folder_id, "title": title}
+            return cast(JsonDict, response.json())
+
+        except requests.JSONDecodeError as e:
+            logging.error(f"JSON decode error updating routine folder: {e}")
+            raise HevyError(f"JSON decode error occurred: {e}")
+        except requests.HTTPError as e:
+            logging.error(f"HTTP error updating routine folder: {e}")
+            if e.response.status_code == 401:
+                raise HevyError("Unauthorized - Invalid or expired access token")
+            raise HevyError(f"HTTP error occurred: {e}")
+        except requests.RequestException as e:
+            logging.error(f"Request error updating routine folder: {e}")
+            raise HevyError(f"Request error occurred: {e}")
+
+    def delete_routine_folder(self, folder_id: str) -> JsonDict:
+        """Delete a routine folder for the authenticated OAuth user."""
+        logging.debug(f"Deleting routine folder: {folder_id}")
+
+        if not self.access_token:
+            raise HevyError("No access token available. Please login first.")
+
+        headers = {
+            "x-api-key": self.config.x_api_key,
+            "Content-Type": "application/json",
+            "Hevy-Platform": "web",
+            "auth-token": self.access_token,
+            "Authorization": f"Bearer {self.access_token}",
+        }
+        params = {"sendSyncEventToMobileApp": "true"}
+
+        try:
+            response = self.session.delete(f"{self.config.routine_folder_url}/{folder_id}", headers=headers, params=params, timeout=30)
+            response.raise_for_status()
+            if not response.text.strip():
+                return {"folderId": folder_id}
+            return cast(JsonDict, response.json())
+
+        except requests.JSONDecodeError as e:
+            logging.error(f"JSON decode error deleting routine folder: {e}")
+            raise HevyError(f"JSON decode error occurred: {e}")
+        except requests.HTTPError as e:
+            logging.error(f"HTTP error deleting routine folder: {e}")
+            if e.response.status_code == 401:
+                raise HevyError("Unauthorized - Invalid or expired access token")
+            raise HevyError(f"HTTP error occurred: {e}")
+        except requests.RequestException as e:
+            logging.error(f"Request error deleting routine folder: {e}")
+            raise HevyError(f"Request error occurred: {e}")
+
+    def create_routine(self, routine: JsonDict) -> JsonDict:
+        """Create a routine for the authenticated OAuth user."""
+        logging.debug("Creating routine")
+
+        if not self.access_token:
+            raise HevyError("No access token available. Please login first.")
+
+        headers = {
+            "x-api-key": self.config.x_api_key,
+            "Content-Type": "application/json",
+            "Hevy-Platform": "web",
+            "auth-token": self.access_token,
+            "Authorization": f"Bearer {self.access_token}",
+        }
+        body = {"routine": routine}
+        params = {"sendSyncEventToMobileApp": "true"}
+
+        try:
+            response = self.session.post(self.config.routine_url, headers=headers, params=params, json=body, timeout=30)
+            response.raise_for_status()
+            return cast(JsonDict, response.json())
+
+        except requests.JSONDecodeError as e:
+            logging.error(f"JSON decode error creating routine: {e}")
+            raise HevyError(f"JSON decode error occurred: {e}")
+        except requests.HTTPError as e:
+            logging.error(f"HTTP error creating routine: {e}")
+            if e.response.status_code == 401:
+                raise HevyError("Unauthorized - Invalid or expired access token")
+            raise HevyError(f"HTTP error occurred: {e}")
+        except requests.RequestException as e:
+            logging.error(f"Request error creating routine: {e}")
+            raise HevyError(f"Request error occurred: {e}")
+
+    def get_routine(self, routine_id: str) -> JsonDict:
+        """Fetch a routine for the authenticated OAuth user."""
+        logging.debug(f"Fetching routine: {routine_id}")
+
+        if not self.access_token:
+            raise HevyError("No access token available. Please login first.")
+
+        headers = {
+            "x-api-key": self.config.x_api_key,
+            "Content-Type": "application/json",
+            "Hevy-Platform": "web",
+            "auth-token": self.access_token,
+            "Authorization": f"Bearer {self.access_token}",
+        }
+
+        try:
+            response = self.session.get(f"{self.config.routine_url}/{routine_id}", headers=headers, timeout=30)
+            response.raise_for_status()
+            return cast(JsonDict, response.json())
+
+        except requests.JSONDecodeError as e:
+            logging.error(f"JSON decode error fetching routine: {e}")
+            raise HevyError(f"JSON decode error occurred: {e}")
+        except requests.HTTPError as e:
+            logging.error(f"HTTP error fetching routine: {e}")
+            if e.response.status_code == 401:
+                raise HevyError("Unauthorized - Invalid or expired access token")
+            raise HevyError(f"HTTP error occurred: {e}")
+        except requests.RequestException as e:
+            logging.error(f"Request error fetching routine: {e}")
+            raise HevyError(f"Request error occurred: {e}")
+
+    def update_routine(self, routine_id: str, routine: JsonDict) -> JsonDict:
+        """Update a routine for the authenticated OAuth user."""
+        logging.debug(f"Updating routine: {routine_id}")
+
+        if not self.access_token:
+            raise HevyError("No access token available. Please login first.")
+
+        headers = {
+            "x-api-key": self.config.x_api_key,
+            "Content-Type": "application/json",
+            "Hevy-Platform": "web",
+            "auth-token": self.access_token,
+            "Authorization": f"Bearer {self.access_token}",
+        }
+        body = {"routine": routine}
+        params = {"sendSyncEventToMobileApp": "true"}
+
+        try:
+            response = self.session.put(f"{self.config.routine_url}/{routine_id}", headers=headers, params=params, json=body, timeout=30)
+            response.raise_for_status()
+            if not response.text.strip():
+                return {"routineId": routine_id}
+            return cast(JsonDict, response.json())
+
+        except requests.JSONDecodeError as e:
+            logging.error(f"JSON decode error updating routine: {e}")
+            raise HevyError(f"JSON decode error occurred: {e}")
+        except requests.HTTPError as e:
+            logging.error(f"HTTP error updating routine: {e}")
+            if e.response.status_code == 401:
+                raise HevyError("Unauthorized - Invalid or expired access token")
+            raise HevyError(f"HTTP error occurred: {e}")
+        except requests.RequestException as e:
+            logging.error(f"Request error updating routine: {e}")
+            raise HevyError(f"Request error occurred: {e}")
+
+    def delete_routine(self, routine_id: str) -> JsonDict:
+        """Delete a routine for the authenticated OAuth user."""
+        logging.debug(f"Deleting routine: {routine_id}")
+
+        if not self.access_token:
+            raise HevyError("No access token available. Please login first.")
+
+        headers = {
+            "x-api-key": self.config.x_api_key,
+            "Content-Type": "application/json",
+            "Hevy-Platform": "web",
+            "auth-token": self.access_token,
+            "Authorization": f"Bearer {self.access_token}",
+        }
+        params = {"sendSyncEventToMobileApp": "true"}
+
+        try:
+            response = self.session.delete(f"{self.config.routine_url}/{routine_id}", headers=headers, params=params, timeout=30)
+            response.raise_for_status()
+            if not response.text.strip():
+                return {"routineId": routine_id}
+            return cast(JsonDict, response.json())
+
+        except requests.JSONDecodeError as e:
+            logging.error(f"JSON decode error deleting routine: {e}")
+            raise HevyError(f"JSON decode error occurred: {e}")
+        except requests.HTTPError as e:
+            logging.error(f"HTTP error deleting routine: {e}")
+            if e.response.status_code == 401:
+                raise HevyError("Unauthorized - Invalid or expired access token")
+            raise HevyError(f"HTTP error occurred: {e}")
+        except requests.RequestException as e:
+            logging.error(f"Request error deleting routine: {e}")
+            raise HevyError(f"Request error occurred: {e}")
 
 ### Hevy API-key client class
 class HevyAPIKeyClient:

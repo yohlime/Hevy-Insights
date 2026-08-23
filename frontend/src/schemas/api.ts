@@ -88,6 +88,35 @@ export const bodyMeasurementResponseSchema = z.object({
   success: z.boolean().optional(),
 }).catchall(z.unknown());
 
+export const routineFolderResponseSchema = z.object({
+  id: z.number(),
+  index: z.number(),
+  title: z.string(),
+  updated_at: z.string(),
+  created_at: z.string(),
+}).catchall(z.unknown());
+
+export const routineFoldersResponseSchema = z.object({
+  routine_folders: z.array(z.record(z.string(), z.unknown())).optional(),
+}).catchall(z.unknown());
+
+export const routineFolderMutationResponseSchema = z.object({
+  folderId: nullableStringSchema,
+  title: nullableStringSchema,
+}).catchall(z.unknown());
+
+export const routineResponseSchema = z.object({
+  routineId: z.string(),
+}).catchall(z.unknown());
+
+export const routineMutationResponseSchema = z.object({
+  routineId: nullableStringSchema,
+}).catchall(z.unknown());
+
+export const routineDetailResponseSchema = z.object({
+  routine: z.record(z.string(), z.unknown()).nullable().optional(),
+}).catchall(z.unknown());
+
 export const versionCheckResponseSchema = z.object({
   current_version: nullableStringSchema,
   latest_version: nullableStringSchema,
@@ -102,4 +131,10 @@ export type AuthStatusResponse = z.infer<typeof authStatusResponseSchema>;
 export type UserAccount = z.infer<typeof userAccountSchema>;
 export type WorkoutsResponse = z.infer<typeof workoutsResponseSchema>;
 export type BodyMeasurement = z.infer<typeof bodyMeasurementSchema>;
+export type RoutineFolderResponse = z.infer<typeof routineFolderResponseSchema>;
+export type RoutineFoldersResponse = z.infer<typeof routineFoldersResponseSchema>;
+export type RoutineFolderMutationResponse = z.infer<typeof routineFolderMutationResponseSchema>;
+export type RoutineResponse = z.infer<typeof routineResponseSchema>;
+export type RoutineMutationResponse = z.infer<typeof routineMutationResponseSchema>;
+export type RoutineDetailResponse = z.infer<typeof routineDetailResponseSchema>;
 export type VersionCheckResponse = z.infer<typeof versionCheckResponseSchema>;
