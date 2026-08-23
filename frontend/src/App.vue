@@ -55,8 +55,8 @@ const checkForUpdates = async () => {
     const result = await versionService.checkForUpdates();
     if (result.update_available) {
       updateAvailable.value = true;
-      latestVersion.value = result.latest_version;
-      releaseUrl.value = result.release_url;
+      latestVersion.value = result.latest_version || "";
+      releaseUrl.value = result.release_url || "";
       showUpdateBanner.value = true;
     }
   } catch (error) {
