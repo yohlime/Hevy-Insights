@@ -33,7 +33,12 @@ RUN playwright install --with-deps chromium \
  && chmod -R 755 /ms-playwright
 
 ### Copy backend sources
-COPY backend /app
+COPY --chown=hevyuser:hevygroup backend/alembic.ini /app/alembic.ini
+COPY --chown=hevyuser:hevygroup backend/app /app/app
+
+### Runtime SQLite database directory
+RUN mkdir -p /app/data \
+ && chown -R hevyuser:hevygroup /app/data
 
 ### Switch to the non-root user
 USER hevyuser

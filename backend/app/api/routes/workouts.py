@@ -15,6 +15,7 @@ router = APIRouter()
 def get_workouts(
     hevy_access_token: str | None = Cookie(None),
     hevy_api_key: str | None = Cookie(None),
+    hevy_session_id: str | None = Cookie(None),
     offset: int = Query(0, ge=0, description="Pagination offset (increments of 5) - for OAuth2 mode"),
     username: str | None = Query(None, description="Filter by username - for OAuth2 mode"),
     page: int = Query(1, ge=1, description="Page number - for api-key mode"),
@@ -39,7 +40,11 @@ def get_workouts(
         return {"workouts": []}
 
     try:
-        client = get_hevy_client(access_token_cookie=hevy_access_token, api_key_cookie=hevy_api_key)
+        client = get_hevy_client(
+            access_token_cookie=hevy_access_token,
+            api_key_cookie=hevy_api_key,
+            session_id_cookie=hevy_session_id,
+        )
 
         if hevy_api_key:
             workouts = client.get_pro_workouts(page=page, page_size=page_size)

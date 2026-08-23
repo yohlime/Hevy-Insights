@@ -1,7 +1,8 @@
 from fastapi import HTTPException, Response
 
-from app.clients.hevy import HevyClient
+from app.clients.hevy import HevyClient, HevyError
 from app.core.config import settings
+from app.services.auth_sessions import delete_auth_session, get_auth_session, is_access_token_expired, update_auth_session_tokens
 
 
 def set_auth_cookies(
@@ -10,6 +11,7 @@ def set_auth_cookies(
     refresh_token: str | None = None,
     api_key: str | None = None,
     expires_at: str | int | None = None,
+    session_id: str | None = None,
 ) -> None:
     if access_token:
         response.set_cookie(
@@ -55,6 +57,17 @@ def set_auth_cookies(
             path="/",
         )
 
+    if session_id:
+        response.set_cookie(
+            key="hevy_session_id",
+            value=session_id,
+            max_age=settings.auth_session_max_age,
+            httponly=True,
+            secure=settings.cookie_secure,
+            samesite=settings.cookie_samesite,
+            path="/",
+        )
+
 
 def clear_auth_cookies(response: Response) -> None:
     cookie_names = [
@@ -62,6 +75,7 @@ def clear_auth_cookies(response: Response) -> None:
         "hevy_refresh_token",
         "hevy_api_key",
         "hevy_token_expires_at",
+        "hevy_session_id",
     ]
     for cookie_name in cookie_names:
         response.delete_cookie(
@@ -75,6 +89,7 @@ def clear_auth_cookies(response: Response) -> None:
 def get_hevy_client(
     access_token_cookie: str | None = None,
     api_key_cookie: str | None = None,
+    session_id_cookie: str | None = None,
 ) -> HevyClient:
     if access_token_cookie == "csv_mode":
         raise HTTPException(
@@ -84,6 +99,27 @@ def get_hevy_client(
 
     if api_key_cookie:
         return HevyClient(api_key=api_key_cookie)
+
+    if session_id_cookie:
+        auth_session = get_auth_session(session_id_cookie)
+        if auth_session:
+            if is_access_token_expired(auth_session.expires_at):
+                if not auth_session.saved_account_secret:
+                    raise HTTPException(status_code=401, detail="Session expired. Please login again.")
+
+                client = HevyClient()
+                try:
+                    user = client.login_with_saved_account(
+                        user_id=auth_session.user_id,
+                        secret=auth_session.saved_account_secret,
+                    )
+                except HevyError as e:
+                    delete_auth_session(session_id_cookie)
+                    raise HTTPException(status_code=401, detail=str(e))
+                update_auth_session_tokens(session_id_cookie, user)
+                return client
+
+            return HevyClient(access_token=auth_session.access_token)
 
     if access_token_cookie and access_token_cookie != "api_key_mode":
         return HevyClient(access_token=access_token_cookie)

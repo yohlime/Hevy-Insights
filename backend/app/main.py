@@ -7,12 +7,14 @@ from slowapi.errors import RateLimitExceeded
 
 from app.api.router import api_router
 from app.core.config import settings
+from app.core.database import run_migrations
 from app.core.logging import setup_logging
 from app.core.rate_limit import limiter
 
 
 def create_app() -> FastAPI:
     setup_logging()
+    run_migrations()
 
     app = FastAPI(
         title="Hevy Insights API",

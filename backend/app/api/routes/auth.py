@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.security import clear_auth_cookies, set_auth_cookies
 from app.schemas.auth import AuthStatusResponse, LoginRequest, LoginResponse, ValidateApiKeyRequest, ValidateApiKeyResponse
+from app.services.auth_sessions import create_auth_session, delete_auth_session, get_auth_session, update_auth_session_tokens
 
 
 router = APIRouter()
@@ -49,6 +50,8 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
 
         client = HevyClient()
         user = client.login(credentials.emailOrUsername, credentials.password, recaptcha_token)
+        saved_account_secret = client.create_saved_account()
+        session_id = create_auth_session(user, saved_account_secret)
 
         login_response = LoginResponse(
             access_token=user.access_token,
@@ -57,6 +60,7 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
             username=user.username,
             email=user.email,
             expires_at=user.expires_at,
+            session_id=session_id,
         )
 
         set_auth_cookies(
@@ -64,6 +68,7 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
             access_token=user.access_token,
             refresh_token=user.refresh_token,
             expires_at=user.expires_at,
+            session_id=session_id,
         )
 
         return login_response
@@ -85,6 +90,7 @@ def refresh_token(
     response: Response,
     hevy_refresh_token: str | None = Cookie(None),
     hevy_access_token: str | None = Cookie(None),
+    hevy_session_id: str | None = Cookie(None),
 ) -> LoginResponse:
     """
     Refresh an expired or expiring OAuth2 access token.
@@ -110,14 +116,25 @@ def refresh_token(
         )
         return refresh_response
 
-    if not hevy_refresh_token:
+    auth_session = get_auth_session(hevy_session_id) if hevy_session_id else None
+    if not hevy_refresh_token and not auth_session:
         raise HTTPException(status_code=401, detail="No refresh credentials found. Please login again.")
 
     try:
-        client = HevyClient()
-        user = client.refresh_access_token(
-            refresh_token=hevy_refresh_token,
-        )
+        if auth_session and auth_session.saved_account_secret:
+            client = HevyClient()
+            user = client.login_with_saved_account(
+                user_id=auth_session.user_id,
+                secret=auth_session.saved_account_secret,
+            )
+            update_auth_session_tokens(auth_session.session_id, user)
+        elif hevy_refresh_token:
+            client = HevyClient()
+            user = client.refresh_access_token(
+                refresh_token=hevy_refresh_token,
+            )
+        else:
+            raise HTTPException(status_code=401, detail="No saved-account secret found. Please login again.")
 
         refresh_token_value = user.refresh_token or hevy_refresh_token
 
@@ -128,6 +145,7 @@ def refresh_token(
             username=user.username,
             email=user.email,
             expires_at=user.expires_at,
+            session_id=auth_session.session_id if auth_session else None,
         )
 
         set_auth_cookies(
@@ -135,6 +153,7 @@ def refresh_token(
             access_token=user.access_token,
             refresh_token=refresh_token_value,
             expires_at=user.expires_at,
+            session_id=auth_session.session_id if auth_session else None,
         )
 
         return refresh_response
@@ -178,12 +197,14 @@ def validate_api_key(key_data: ValidateApiKeyRequest, response: Response) -> Val
 
 
 @router.post("/logout", tags=["Authentication"])
-def logout(response: Response):
+def logout(response: Response, hevy_session_id: str | None = Cookie(None)):
     """
     Logout the current user by clearing authentication cookies.
 
     Returns success message.
     """
+    if hevy_session_id:
+        delete_auth_session(hevy_session_id)
     clear_auth_cookies(response)
     return {"message": "Logged out successfully"}
 
@@ -192,6 +213,7 @@ def logout(response: Response):
 def auth_status(
     hevy_access_token: str | None = Cookie(None),
     hevy_api_key: str | None = Cookie(None),
+    hevy_session_id: str | None = Cookie(None),
 ):
     """
     Check current authentication status.
@@ -209,6 +231,12 @@ def auth_status(
         return AuthStatusResponse(
             authenticated=True,
             auth_mode="api_key",
+        )
+
+    if hevy_session_id and get_auth_session(hevy_session_id):
+        return AuthStatusResponse(
+            authenticated=True,
+            auth_mode="oauth2",
         )
 
     if hevy_access_token and hevy_access_token not in ["csv_mode", "api_key_mode"]:

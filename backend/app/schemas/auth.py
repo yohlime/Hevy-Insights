@@ -13,6 +13,7 @@ class LoginResponse(BaseModel):
     email: str | None = None
     refresh_token: str | None = None
     expires_at: str | int | None = None
+    session_id: str | None = None
 
 
 class RefreshTokenRequest(BaseModel):

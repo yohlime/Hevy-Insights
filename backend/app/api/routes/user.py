@@ -16,6 +16,7 @@ router = APIRouter()
 def get_user_account(
     hevy_access_token: str | None = Cookie(None),
     hevy_api_key: str | None = Cookie(None),
+    hevy_session_id: str | None = Cookie(None),
 ) -> dict[str, Any]:
     """
     Get authenticated user's account information.
@@ -27,7 +28,11 @@ def get_user_account(
         return load_sample_data("user_account.json")
 
     try:
-        client = get_hevy_client(access_token_cookie=hevy_access_token, api_key_cookie=hevy_api_key)
+        client = get_hevy_client(
+            access_token_cookie=hevy_access_token,
+            api_key_cookie=hevy_api_key,
+            session_id_cookie=hevy_session_id,
+        )
         account = client.get_user_account()
 
         return account

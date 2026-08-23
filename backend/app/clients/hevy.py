@@ -6,7 +6,7 @@ from os import getenv
 from typing import Any, cast
 from dotenv import load_dotenv
 
-from app.models.hevy import HevyUser
+from app.schemas.hevy import HevyUser
 
 ### ============================================================================
 
@@ -35,6 +35,14 @@ class HevyConfig:
     def refresh_token_url(self) -> str:
         """OAuth2 token refresh endpoint."""
         return f"{self.base_url}/refresh_token"
+
+    @property
+    def create_saved_account_url(self) -> str:
+        return f"{self.base_url}/auth/create_saved_account"
+
+    @property
+    def login_with_saved_account_url(self) -> str:
+        return f"{self.base_url}/login_with_saved_account"
 
     @property
     def user_account_url(self) -> str:
@@ -160,6 +168,83 @@ class HevyClient:
         except Exception as e:
             logging.error(f"Unexpected error during login: {e}")
             raise HevyError(f"Unexpected error occurred: {e}")
+
+    def create_saved_account(self) -> str:
+        """Create a saved-account secret for future browser-login sessions."""
+        if not self.access_token:
+            raise HevyError("No access token available. Please login first.")
+
+        headers = {
+            "x-api-key": self.config.x_api_key,
+            "Content-Type": "application/json",
+            "Hevy-Platform": "web",
+            "auth-token": self.access_token,
+            "Authorization": f"Bearer {self.access_token}",
+        }
+
+        try:
+            response = self.session.post(self.config.create_saved_account_url, headers=headers, timeout=30)
+            response.raise_for_status()
+
+            data = cast(JsonDict, response.json())
+            secret = data.get("secret")
+            if not isinstance(secret, str) or not secret:
+                logging.error(f"Missing saved-account secret in response. Keys: {list(data.keys())}")
+                raise HevyError("Saved-account response missing secret")
+
+            return secret
+
+        except requests.JSONDecodeError as e:
+            logging.error(f"JSON decode error creating saved account: {e}")
+            raise HevyError(f"JSON decode error occurred: {e}")
+        except requests.HTTPError as e:
+            logging.error(f"HTTP error creating saved account: {e}")
+            raise HevyError(f"Saved-account creation failed: {e}")
+        except requests.RequestException as e:
+            logging.error(f"Request error creating saved account: {e}")
+            raise HevyError(f"Saved-account creation failed: {e}")
+
+    def login_with_saved_account(self, user_id: str, secret: str) -> HevyUser:
+        """Login using a saved-account secret."""
+        logging.debug("Logging in with Hevy saved account...")
+
+        headers = {"x-api-key": self.config.x_api_key, "Content-Type": "application/json", "Hevy-Platform": "web"}
+        body = {"userId": user_id, "secret": secret}
+
+        try:
+            response = self.session.post(self.config.login_with_saved_account_url, headers=headers, json=body, timeout=30)
+            response.raise_for_status()
+
+            data = cast(JsonDict, response.json())
+            access_token = data.get("access_token") or data.get("auth_token")
+            refresh_token = data.get("refresh_token")
+            response_user_id = data.get("user_id")
+
+            if not isinstance(access_token, str) or not access_token:
+                logging.error(f"Missing access token in saved-account response. Keys: {list(data.keys())}")
+                raise HevyError("Saved-account login response missing access token")
+
+            self.access_token = access_token
+            self._update_headers()
+
+            return HevyUser(
+                access_token=access_token,
+                user_id=response_user_id if isinstance(response_user_id, str) else user_id,
+                refresh_token=refresh_token if isinstance(refresh_token, str) else None,
+                expires_at=data.get("expires_at"),
+            )
+
+        except requests.JSONDecodeError as e:
+            logging.error(f"JSON decode error during saved-account login: {e}")
+            raise HevyError(f"JSON decode error occurred: {e}")
+        except requests.HTTPError as e:
+            logging.error(f"HTTP error during saved-account login: {e}")
+            if e.response.status_code in (400, 401, 404):
+                raise HevyError("Invalid or expired saved-account secret")
+            raise HevyError(f"Saved-account login failed: {e}")
+        except requests.RequestException as e:
+            logging.error(f"Request error during saved-account login: {e}")
+            raise HevyError(f"Saved-account login failed: {e}")
 
     def refresh_access_token(self, refresh_token: str) -> HevyUser:
         """

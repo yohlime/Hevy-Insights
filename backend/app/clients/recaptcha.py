@@ -14,8 +14,12 @@ Key features:
 
 import logging
 import time
-from playwright.async_api import async_playwright, Browser
 from os import getenv
+
+from dotenv import load_dotenv
+from playwright.async_api import async_playwright, Browser
+
+load_dotenv()
 
 ### reCAPTCHA configuration
 RECAPTCHA_SITE_KEY = getenv("RECAPTCHA_SITE_KEY")
@@ -181,44 +185,22 @@ async def _generate_recaptcha_token() -> str:
             ### Try to continue even if networkidle times out
             await page.wait_for_timeout(2000)
 
-        ### Wait for reCAPTCHA to load and get token with timeout
-        ## The token is stored in window.recaptchaToken by Hevy's frontend
+        ### Wait for reCAPTCHA to load and get token with timeout.
+        ## Prefer direct execution; long-running page evaluations can be interrupted by Hevy's client-side navigation.
         try:
-            token = await page.evaluate(f"""
-                () => {{
-                    return new Promise((resolve, reject) => {{
-                        const maxAttempts = 50;
-                        let attempts = 0;
+            token = await page.evaluate("() => window.recaptchaToken || window.__recaptchaToken || null")
+            if not token:
+                if not RECAPTCHA_SITE_KEY:
+                    raise Exception("RECAPTCHA_SITE_KEY environment variable is required")
 
-                        const checkToken = () => {{
-                            // Check for reCAPTCHA token in various possible locations
-                            const token = window.recaptchaToken ||
-                                         window.__recaptchaToken ||
-                                         window.grecaptcha?.enterprise?.execute ||
-                                         null;
-
-                            if (token && typeof token === 'string') {{
-                                resolve(token);
-                            }} else if (attempts >= maxAttempts) {{
-                                // Try to execute reCAPTCHA if available
-                                if (window.grecaptcha && window.grecaptcha.enterprise) {{
-                                    window.grecaptcha.enterprise.execute(
-                                        '{RECAPTCHA_SITE_KEY}',
-                                        {{action: 'login'}}
-                                    ).then(resolve).catch(reject);
-                                }} else {{
-                                    reject(new Error('reCAPTCHA token not found after 10 seconds'));
-                                }}
-                            }} else {{
-                                attempts++;
-                                setTimeout(checkToken, 200);
-                            }}
-                        }};
-
-                        checkToken();
-                    }});
-                }}
-            """)
+                await page.wait_for_function(
+                    "() => window.grecaptcha && window.grecaptcha.enterprise && window.grecaptcha.enterprise.execute",
+                    timeout=30000,
+                )
+                token = await page.evaluate(
+                    "async (siteKey) => await window.grecaptcha.enterprise.execute(siteKey, { action: 'login' })",
+                    RECAPTCHA_SITE_KEY,
+                )
         except Exception as eval_error:
             ### If evaluation crashes, reset browser for next attempt
             logging.error(f"Page evaluation failed or crashed: {eval_error}")

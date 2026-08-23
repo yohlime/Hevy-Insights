@@ -181,6 +181,10 @@ Clone/download the repository and follow these steps:
 
    Re-run `playwright install chromium` if Playwright is upgraded or the backend reports a missing browser executable.
 
+   The backend stores auth session data in `backend/data/hevy.db` by default. Set `DATABASE_PATH` to use a different SQLite file path. Relative paths resolve from `backend/`.
+
+   The backend runs Alembic migrations automatically on startup. To apply migrations explicitly, run `alembic -c backend/alembic.ini upgrade head` from an activated backend virtual environment.
+
 3. **Start the backend** (Terminal 1):
 
    `uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 5000`
@@ -252,9 +256,9 @@ hevy-insights/
 │   ├── app/                   # FastAPI application package
 │   │   ├── api/               # API router and route modules
 │   │   ├── clients/           # Hevy API and reCAPTCHA clients
-│   │   ├── core/              # Settings, logging, rate limiting, security helpers
-│   │   ├── models/            # Internal domain models
-│   │   ├── schemas/           # Pydantic request/response schemas
+│   │   ├── core/              # Settings, database, logging, rate limiting, security helpers
+│   │   ├── db/                # SQLAlchemy tables and Alembic migrations
+│   │   ├── schemas/           # Pydantic schemas and Hevy API DTOs
 │   │   ├── services/          # Demo data and version-check services
 │   │   └── main.py            # FastAPI app factory and ASGI app
 │   └── requirements.txt       # Python backend dependencies
@@ -307,11 +311,11 @@ hevy-insights/
 1. User logs in via `/api/login` endpoint with Hevy credentials
 2. Backend automatically generates reCAPTCHA v3 token using Playwright (headless Chrome)
 3. Backend authenticates with Hevy API using OAuth2 and receives `access_token` + `refresh_token`
-4. Backend creates a Hevy saved-account secret for browser-login token refresh
-5. Backend sets **HttpOnly cookies** (`hevy_access_token`, `hevy_refresh_token`, `hevy_token_expires_at`, `hevy_saved_account_user_id`, `hevy_saved_account_secret`)
+4. Backend creates a Hevy saved-account secret and stores it server-side in the configured SQLite database, defaulting to `backend/data/hevy.db`
+5. Backend sets **HttpOnly cookies** (`hevy_access_token`, `hevy_refresh_token`, `hevy_token_expires_at`, `hevy_session_id`)
 6. Browser automatically sends cookies with subsequent API requests
 7. Backend reads authentication from cookies and proxies requests to Hevy API
-8. On token expiration, backend refreshes browser-login sessions via `/api/auth/refresh_token` using the saved-account cookies
+8. On token expiration, backend re-logins via Hevy's saved-account flow using the server-side session secret
 
 **PRO API Key Authentication:**
 
