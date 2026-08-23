@@ -57,41 +57,41 @@ class HevyConfig:
         return f"{self.base_url}/v1/workouts"
 
     @property
+    def pro_user_info_url(self) -> str:
+        return f"{self.base_url}/v1/user/info"
+
+    @property
+    def pro_body_measurements_url(self) -> str:
+        return f"{self.base_url}/v1/body_measurements"
+
+    @property
     def body_measurements_url(self) -> str:
         return f"{self.base_url}/body_measurements"
 
 
-### Main API client class
-class HevyClient:
+### Main OAuth/free API client class
+class HevyOAuthClient:
     """
-    Main API client to interact with Hevy services.
-
-    Seperated into two authentication methods:
-    1. OAuth2 Bearer token (for username/password login)
-    2. Hevy PRO API key (for PRO subscribers)
+    Client for Hevy's OAuth/free API used by username/password login.
     """
 
-    def __init__(self, access_token: str | None = None, api_key: str | None = None, config: HevyConfig | None = None):
+    def __init__(self, access_token: str | None = None, config: HevyConfig | None = None):
         self.access_token = access_token  # OAuth2 access token
-        self.api_key = api_key  # Hevy PRO API key
         self.config = config or HevyConfig()
         self.session = requests.Session()
 
-        if access_token or api_key:
+        if access_token:
             self._update_headers()
 
     def _update_headers(self) -> None:
         """
-        Update session headers with current OAuth2 Bearer token or PRO API key.
+        Update session headers with current OAuth2 Bearer token.
         """
         headers = {
             "Content-Type": "application/json",
         }
 
-        ### Use PRO API key if available, otherwise use OAuth2 Bearer token
-        if self.api_key:
-            headers["api-key"] = self.api_key
-        elif self.access_token:
+        if self.access_token:
             headers["x-api-key"] = self.config.x_api_key
             headers["Authorization"] = f"Bearer {self.access_token}"
 
@@ -472,9 +472,117 @@ class HevyClient:
             logging.error(f"Unexpected error posting body measurements: {e}")
             raise HevyError(f"Unexpected error occurred: {e}")
 
-    ### ========== Hevy PRO API Methods ==========
+### Hevy API-key client class
+class HevyAPIKeyClient:
+    """Client for Hevy's API-key endpoints."""
 
-    def get_pro_workouts(self, page: int = 1, page_size: int = 10) -> JsonDict:
+    def __init__(self, api_key: str, config: HevyConfig | None = None):
+        self.api_key = api_key
+        self.config = config or HevyConfig()
+        self.session = requests.Session()
+        self.session.headers.update({"Content-Type": "application/json", "api-key": self.api_key})
+
+    ### ========== Hevy API-key Methods ==========
+
+    def get_user_account(self) -> JsonDict:
+        """Fetch authenticated PRO user information."""
+        logging.debug("Fetching PRO user information...")
+
+        try:
+            response = self.session.get(self.config.pro_user_info_url, timeout=30)
+            response.raise_for_status()
+
+            data = cast(JsonDict, response.json())
+            user_data = data.get("data")
+            if isinstance(user_data, dict):
+                return {
+                    **user_data,
+                    "username": user_data.get("name"),
+                    "email": None,
+                }
+            return data
+
+        except requests.JSONDecodeError as e:
+            logging.error(f"JSON decode error fetching PRO user info: {e}")
+            raise HevyError(f"JSON decode error occurred: {e}")
+        except requests.HTTPError as e:
+            logging.error(f"HTTP error fetching PRO user info: {e}")
+            if e.response.status_code == 401:
+                raise HevyError("Unauthorized - Invalid API key")
+            if e.response.status_code == 404:
+                raise HevyError("User not found")
+            raise HevyError(f"HTTP error occurred: {e}")
+        except requests.RequestException as e:
+            logging.error(f"Request error fetching PRO user info: {e}")
+            raise HevyError(f"Request error occurred: {e}")
+
+    def get_body_measurements(self) -> list[JsonDict]:
+        """Fetch all PRO body measurements and return the frontend-compatible list shape."""
+        logging.debug("Fetching PRO body measurements...")
+
+        measurements: list[JsonDict] = []
+        page = 1
+        page_size = 10
+
+        while True:
+            try:
+                response = self.session.get(
+                    self.config.pro_body_measurements_url,
+                    params={"page": page, "pageSize": page_size},
+                    timeout=30,
+                )
+                response.raise_for_status()
+
+                data = cast(JsonDict, response.json())
+                batch = data.get("body_measurements")
+                if not isinstance(batch, list) or not batch:
+                    return measurements
+
+                measurements.extend(measurement for measurement in batch if isinstance(measurement, dict))
+                page_count = data.get("page_count")
+                if isinstance(page_count, int) and page >= page_count:
+                    return measurements
+                page += 1
+
+            except requests.JSONDecodeError as e:
+                logging.error(f"JSON decode error fetching PRO body measurements: {e}")
+                raise HevyError(f"JSON decode error occurred: {e}")
+            except requests.HTTPError as e:
+                logging.error(f"HTTP error fetching PRO body measurements: {e}")
+                if e.response.status_code == 401:
+                    raise HevyError("Unauthorized - Invalid API key")
+                if e.response.status_code == 404:
+                    return measurements
+                raise HevyError(f"HTTP error occurred: {e}")
+            except requests.RequestException as e:
+                logging.error(f"Request error fetching PRO body measurements: {e}")
+                raise HevyError(f"Request error occurred: {e}")
+
+    def post_body_measurements(self, date: str, weight_kg: float) -> dict[str, bool]:
+        """Create a PRO body measurement entry."""
+        logging.debug(f"Posting PRO body measurement: {date=}, {weight_kg=}")
+
+        try:
+            response = self.session.post(
+                self.config.pro_body_measurements_url,
+                json={"date": date, "weight_kg": weight_kg},
+                timeout=30,
+            )
+            response.raise_for_status()
+            return {"success": True}
+
+        except requests.HTTPError as e:
+            logging.error(f"HTTP error posting PRO body measurement: {e}")
+            if e.response.status_code == 401:
+                raise HevyError("Unauthorized - Invalid API key")
+            if e.response.status_code == 409:
+                raise HevyError("A body measurement for this date already exists")
+            raise HevyError(f"HTTP error occurred: {e}")
+        except requests.RequestException as e:
+            logging.error(f"Request error posting PRO body measurement: {e}")
+            raise HevyError(f"Request error occurred: {e}")
+
+    def get_workouts(self, page: int = 1, page_size: int = 10) -> JsonDict:
         """
         Fetch paginated workouts from Hevy PRO API.
 
@@ -496,18 +604,19 @@ class HevyClient:
         params = {"page": page, "pageSize": page_size}
 
         try:
-            response = self.session.get(self.config.pro_workouts_url, params=params)
+            response = self.session.get(self.config.pro_workouts_url, params=params, timeout=30)
             response.raise_for_status()
 
             data = cast(JsonDict, response.json())
             workouts = cast(list[JsonDict], data.get("workouts", []))
 
-            ### Transform PRO API format to match free API format
+            ### Transform PRO API format to match the frontend/free API shape.
             from datetime import datetime
 
             for workout in workouts:
-                ### Convert ISO 8601 timestamps to Unix timestamps (seconds)
-                ## NOTE: Frontend expects timestamps in Unix format (just like free API)
+                if not isinstance(workout, dict):
+                    continue
+
                 if "start_time" in workout and isinstance(workout["start_time"], str):
                     workout["start_time"] = int(datetime.fromisoformat(workout["start_time"].replace("Z", "+00:00")).timestamp())
                 if "end_time" in workout and isinstance(workout["end_time"], str):
@@ -517,20 +626,21 @@ class HevyClient:
                 if "created_at" in workout and isinstance(workout["created_at"], str):
                     workout["created_at"] = int(datetime.fromisoformat(workout["created_at"].replace("Z", "+00:00")).timestamp())
 
-                ### Calculate estimated_volume_kg from exercises/sets (PRO API doesn't include this)
-                ## NOTE: Frontend relies on this field for various calculations and displays
                 estimated_volume = 0
-                for exercise in workout.get("exercises", []):
-                    ### Add unique ID for exercise if missing (for frontend state management)
+                for exercise_index, exercise in enumerate(workout.get("exercises", [])):
+                    if not isinstance(exercise, dict):
+                        continue
+
                     if "id" not in exercise:
-                        exercise["id"] = f"{workout['id']}-ex-{exercise['index']}"
+                        exercise["id"] = f"{workout['id']}-ex-{exercise.get('index', exercise_index)}"
 
-                    for set_data in exercise.get("sets", []):
-                        ### Add unique ID for set if missing
+                    for set_index, set_data in enumerate(exercise.get("sets", [])):
+                        if not isinstance(set_data, dict):
+                            continue
+
                         if "id" not in set_data:
-                            set_data["id"] = f"{exercise['id']}-set-{set_data['index']}"
+                            set_data["id"] = f"{exercise['id']}-set-{set_data.get('index', set_index)}"
 
-                        ### Include all set types in volume calculation
                         weight = set_data.get("weight_kg") or 0
                         reps = set_data.get("reps") or 0
                         estimated_volume += weight * reps

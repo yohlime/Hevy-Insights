@@ -1,17 +1,30 @@
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Cookie, HTTPException, Query
 
 from app.clients.hevy import HevyError
 from app.core.config import settings
 from app.core.security import get_hevy_client
+from app.schemas.hevy import HevyWorkoutsResponse
 from app.services.demo_data import load_sample_data
+from app.services.workout_cache import (
+    api_key_account_key,
+    get_cached_workouts,
+    is_workout_sync_complete,
+    mark_workout_sync,
+    oauth_account_key,
+    should_sync_workouts,
+    store_workouts,
+)
 
 
 router = APIRouter()
+OAUTH_WORKOUT_PAGE_SIZE = 5
+MAX_WORKOUT_SYNC_PAGES = 2000
 
 
-@router.get("/workouts", tags=["Workouts"])
+@router.get("/workouts", response_model=HevyWorkoutsResponse, tags=["Workouts"])
 def get_workouts(
     hevy_access_token: str | None = Cookie(None),
     hevy_api_key: str | None = Cookie(None),
@@ -40,18 +53,56 @@ def get_workouts(
         return {"workouts": []}
 
     try:
-        client = get_hevy_client(
-            access_token_cookie=hevy_access_token,
-            api_key_cookie=hevy_api_key,
-            session_id_cookie=hevy_session_id,
-        )
-
         if hevy_api_key:
-            workouts = client.get_pro_workouts(page=page, page_size=page_size)
+            client = get_hevy_client(api_key_cookie=hevy_api_key)
+            page_offset = (page - 1) * page_size
+            account_key = api_key_account_key(hevy_api_key)
+            if should_sync_workouts(
+                source="api_key",
+                account_key=account_key,
+                requested_offset=page_offset,
+                requested_limit=page_size,
+            ):
+                _sync_api_key_workouts(client=client, account_key=account_key, page_size=page_size)
+
+            cached_workouts = get_cached_workouts(
+                source="api_key",
+                account_key=account_key,
+                offset=page_offset,
+                limit=page_size,
+            )
+            workouts = {
+                "workouts": cached_workouts,
+                "page": page,
+                "page_size": page_size,
+                "workout_count": len(cached_workouts),
+            }
         else:
             if not username:
                 raise HTTPException(status_code=400, detail="username parameter is required for OAuth2 mode")
-            workouts = client.get_workouts(username=username, offset=offset)
+
+            client = get_hevy_client(
+                access_token_cookie=hevy_access_token,
+                session_id_cookie=hevy_session_id,
+            )
+
+            account_key = oauth_account_key(username)
+            if should_sync_workouts(
+                source="oauth",
+                account_key=account_key,
+                requested_offset=offset,
+                requested_limit=OAUTH_WORKOUT_PAGE_SIZE,
+            ):
+                _sync_oauth_workouts(client=client, username=username, account_key=account_key)
+
+            workouts = {
+                "workouts": get_cached_workouts(
+                    source="oauth",
+                    account_key=account_key,
+                    offset=offset,
+                    limit=OAUTH_WORKOUT_PAGE_SIZE,
+                )
+            }
 
         return workouts
 
@@ -59,3 +110,51 @@ def get_workouts(
         logging.error(f"Error fetching workouts: {e}")
         status_code = 401 if "Unauthorized" in str(e) else 500
         raise HTTPException(status_code=status_code, detail=str(e))
+
+
+def _sync_oauth_workouts(*, client: Any, username: str, account_key: str) -> None:
+    source = "oauth"
+    stop_on_existing = is_workout_sync_complete(source=source, account_key=account_key)
+
+    offset = 0
+    for _ in range(MAX_WORKOUT_SYNC_PAGES):
+        response = client.get_workouts(username=username, offset=offset)
+        workouts = _workouts_from_response(response)
+        found_existing = store_workouts(source=source, account_key=account_key, workouts=workouts)
+
+        if not workouts:
+            mark_workout_sync(source=source, account_key=account_key, fully_synced=True)
+            return
+        if stop_on_existing and found_existing:
+            mark_workout_sync(source=source, account_key=account_key, fully_synced=True)
+            return
+
+        offset += OAUTH_WORKOUT_PAGE_SIZE
+
+    mark_workout_sync(source=source, account_key=account_key, fully_synced=False)
+
+
+def _sync_api_key_workouts(*, client: Any, account_key: str, page_size: int) -> None:
+    source = "api_key"
+    stop_on_existing = is_workout_sync_complete(source=source, account_key=account_key)
+
+    for page in range(1, MAX_WORKOUT_SYNC_PAGES + 1):
+        response = client.get_workouts(page=page, page_size=page_size)
+        workouts = _workouts_from_response(response)
+        found_existing = store_workouts(source=source, account_key=account_key, workouts=workouts)
+
+        if not workouts:
+            mark_workout_sync(source=source, account_key=account_key, fully_synced=True)
+            return
+        if stop_on_existing and found_existing:
+            mark_workout_sync(source=source, account_key=account_key, fully_synced=True)
+            return
+
+    mark_workout_sync(source=source, account_key=account_key, fully_synced=False)
+
+
+def _workouts_from_response(response: dict[str, Any]) -> list[dict[str, Any]]:
+    workouts = response.get("workouts")
+    if not isinstance(workouts, list):
+        return []
+    return [dict(workout) for workout in workouts if isinstance(workout, dict)]

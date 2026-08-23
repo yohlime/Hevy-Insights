@@ -15,6 +15,7 @@ router = APIRouter()
 @router.get("/body_measurements", tags=["Body Measurements"])
 def get_body_measurements(
     hevy_access_token: str | None = Cookie(None),
+    hevy_api_key: str | None = Cookie(None),
     hevy_session_id: str | None = Cookie(None),
 ):
     """
@@ -22,20 +23,24 @@ def get_body_measurements(
 
     Returns list of measurements with id, weight_kg, date, and created_at.
 
-    Requires OAuth2 authentication cookie. PRO API does not support body measurements.
+    Requires OAuth2 authentication cookie or Hevy PRO API key cookie.
     """
     if settings.demo_mode:
         logging.info("Demo mode: Serving sample body measurements")
         return load_sample_data("body_measurements.json")
 
-    if (not hevy_access_token and not hevy_session_id) or hevy_access_token in ["csv_mode", "api_key_mode"]:
+    if hevy_access_token == "csv_mode" or (not hevy_api_key and not hevy_access_token and not hevy_session_id):
         raise HTTPException(
             status_code=400,
-            detail="Body measurements require OAuth2 authentication. Not available for Hevy PRO API key or CSV mode.",
+            detail="Body measurements require Hevy authentication. Not available for CSV mode.",
         )
 
     try:
-        client = get_hevy_client(access_token_cookie=hevy_access_token, session_id_cookie=hevy_session_id)
+        client = get_hevy_client(
+            access_token_cookie=hevy_access_token,
+            api_key_cookie=hevy_api_key,
+            session_id_cookie=hevy_session_id,
+        )
         measurements = client.get_body_measurements()
         return measurements
 
@@ -49,12 +54,13 @@ def get_body_measurements(
 def post_body_measurements(
     measurement: BodyMeasurementRequest,
     hevy_access_token: str | None = Cookie(None),
+    hevy_api_key: str | None = Cookie(None),
     hevy_session_id: str | None = Cookie(None),
 ):
     """
     Post a new body measurement (weight tracking).
 
-    Requires OAuth2 authentication cookie. PRO API does not support body measurements.
+    Requires OAuth2 authentication cookie or Hevy PRO API key cookie.
 
     Args:
         measurement: Body measurement data (date and weight_kg)
@@ -63,14 +69,18 @@ def post_body_measurements(
         logging.info("Demo mode: Simulating body measurement post")
         return {"message": "Body measurement posted successfully (demo mode)"}
 
-    if (not hevy_access_token and not hevy_session_id) or hevy_access_token in ["csv_mode", "api_key_mode"]:
+    if hevy_access_token == "csv_mode" or (not hevy_api_key and not hevy_access_token and not hevy_session_id):
         raise HTTPException(
             status_code=400,
-            detail="Body measurements require OAuth2 authentication. Not available for Hevy PRO API key or CSV mode.",
+            detail="Body measurements require Hevy authentication. Not available for CSV mode.",
         )
 
     try:
-        client = get_hevy_client(access_token_cookie=hevy_access_token, session_id_cookie=hevy_session_id)
+        client = get_hevy_client(
+            access_token_cookie=hevy_access_token,
+            api_key_cookie=hevy_api_key,
+            session_id_cookie=hevy_session_id,
+        )
         client.post_body_measurements(measurement.date, measurement.weight_kg)
         return {"message": "Body measurement posted successfully"}
 

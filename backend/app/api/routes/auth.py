@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response
 
-from app.clients.hevy import HevyClient, HevyError
+from app.clients.hevy import HevyAPIKeyClient, HevyError, HevyOAuthClient
 from app.clients.recaptcha import get_recaptcha_token, invalidate_recaptcha_cache
 from app.core.config import settings
 from app.core.rate_limit import limiter
@@ -48,7 +48,7 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
     try:
         recaptcha_token = await get_recaptcha_token()
 
-        client = HevyClient()
+        client = HevyOAuthClient()
         user = client.login(credentials.emailOrUsername, credentials.password, recaptcha_token)
         saved_account_secret = client.create_saved_account()
         session_id = create_auth_session(user, saved_account_secret)
@@ -122,14 +122,14 @@ def refresh_token(
 
     try:
         if auth_session and auth_session.saved_account_secret:
-            client = HevyClient()
+            client = HevyOAuthClient()
             user = client.login_with_saved_account(
                 user_id=auth_session.user_id,
                 secret=auth_session.saved_account_secret,
             )
             update_auth_session_tokens(auth_session.session_id, user)
         elif hevy_refresh_token:
-            client = HevyClient()
+            client = HevyOAuthClient()
             user = client.refresh_access_token(
                 refresh_token=hevy_refresh_token,
             )
@@ -182,7 +182,7 @@ def validate_api_key(key_data: ValidateApiKeyRequest, response: Response) -> Val
         return ValidateApiKeyResponse(valid=True)
 
     try:
-        client = HevyClient(api_key=key_data.api_key)
+        client = HevyAPIKeyClient(api_key=key_data.api_key)
         is_valid = client.validate_api_key()
 
         if is_valid:

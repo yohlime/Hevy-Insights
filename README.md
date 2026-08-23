@@ -302,7 +302,7 @@ hevy-insights/
 - **View Components**: The matched page component (`Login.vue`, `Dashboard.vue`, `Workouts_Card.vue`, `.....vue`) runs `setup()` and lifecycle hooks (`onMounted`).
 - **Pinia Store** (*frontend/src/stores/hevy_cache.ts*): Centralized state with 5‑minute caching for workouts (`workoutsLastFetched`). Exposes actions `fetchUserAccount()`, `fetchWorkouts(force)` and getters like `username`, `hasWorkouts`. Prevents redundant API calls when navigating.
 - **Axios Service** (*frontend/src/services/api.ts*): Configures base URL with `withCredentials: true` for cookie support. Authentication is handled automatically via HttpOnly cookies set by the backend. All frontend API calls to the backend go through these typed helpers.
-- **Backend** (FastAPI): Serves `/api` endpoints. Supports dual authentication (OAuth2 Bearer tokens or PRO API keys) via HttpOnly cookies. Proxies requests to the official Hevy API. Frontend receives JSON responses and Vue reactivity updates the UI.
+- **Backend** (FastAPI): Serves `/api` endpoints. Supports dual authentication (OAuth2 Bearer tokens or PRO API keys) via HttpOnly cookies. Workouts and their exercises are cached lazily in the configured SQLite database, defaulting to `backend/data/hevy.db`; sync fetches from newest to oldest until it reaches an already-stored workout ID, then normalized responses are returned from SQLite. Frontend receives JSON responses and Vue reactivity updates the UI.
 
 ### API Authentication Flow
 

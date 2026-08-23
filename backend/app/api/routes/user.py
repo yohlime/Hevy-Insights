@@ -21,7 +21,7 @@ def get_user_account(
     """
     Get authenticated user's account information.
 
-    Requires authentication cookie (OAuth2 token or Hevy PRO API key).
+    Requires an OAuth2 authentication cookie or Hevy PRO API key cookie.
     """
     if settings.demo_mode:
         logging.info("Demo mode: Serving sample user account")
