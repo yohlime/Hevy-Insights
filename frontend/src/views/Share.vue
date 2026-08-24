@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useHevyCache } from "../stores/hevy_cache";
 import { calculateCSVStats } from "../utils/csvCalculator";
+import { calculateWorkoutStreakWeeks } from "../utils/streaks";
 import { getWeightUnit } from "../utils/formatters";
 import html2canvas from "html2canvas";
 
@@ -96,37 +97,9 @@ const mostTrainedExercise = computed(() => {
   return { name: best || "-", count: max };
 });
 
-// Helper functions - Match Dashboard.vue exactly
-const startOfWeek = (d: Date) => {
-  const dd = new Date(d);
-  const day = dd.getDay(); // 0=Sun
-  const offsetToMonday = day === 0 ? -6 : 1 - day;
-  dd.setDate(dd.getDate() + offsetToMonday);
-  dd.setHours(0,0,0,0);
-  return dd;
-};
-
-const weekKey = (d: Date) => {
-  const m = startOfWeek(d);
-  // Use local date for week grouping
-  return `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}-${String(m.getDate()).padStart(2, '0')}`;
-};
-
 // Workout streak (consecutive weeks with at least 1 workout) - Match Dashboard.vue
 const workoutStreakWeeks = computed(() => {
-  const now = new Date();
-  const weeks: Record<string, boolean> = {};
-  for (const w of workouts.value) {
-    const d = new Date((w.start_time || 0) * 1000);
-    weeks[weekKey(d)] = true;
-  }
-  let streak = 0;
-  let current = startOfWeek(now);
-  while (weeks[weekKey(current)]) {
-    streak++;
-    current.setDate(current.getDate() - 7);
-  }
-  return streak;
+  return calculateWorkoutStreakWeeks(workouts.value);
 });
 
 // Selected card for preview
@@ -181,29 +154,7 @@ const yearPRCount = computed(() => {
 });
 
 const yearWorkoutStreakWeeks = computed(() => {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const weeks: Record<string, boolean> = {};
-  
-  // Mark all weeks that have workouts in the selected year
-  for (const w of yearWorkouts.value) {
-    const d = new Date((w.start_time || 0) * 1000);
-    weeks[weekKey(d)] = true;
-  }
-  
-  let streak = 0;
-  // Start from current date if selected year is current year, otherwise from Dec 31 of selected year
-  let current = selectedYear.value === currentYear 
-    ? startOfWeek(now) 
-    : startOfWeek(new Date(selectedYear.value, 11, 31)); // Dec 31 of selected year
-  
-  // Count backwards only within the selected year
-  while (weeks[weekKey(current)] && current.getFullYear() === selectedYear.value) {
-    streak++;
-    current.setDate(current.getDate() - 7);
-  }
-  
-  return streak;
+  return calculateWorkoutStreakWeeks(yearWorkouts.value, { year: selectedYear.value });
 });
 
 // Card types with localization support

@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useHevyCache } from "../stores/hevy_cache";
 import { calculateCSVStats, calculatePRsGrouped, calculateMuscleDistribution } from "../utils/csvCalculator";
+import { calculateWorkoutStreakWeeks } from "../utils/streaks";
 import { formatDuration, formatWeight, getWeightUnit, formatPRValue, formatDate, formatMonthYear } from "../utils/formatters";
 import { authService } from "../services/api";
 import { Line, Doughnut, Radar, Bar } from "vue-chartjs";
@@ -585,19 +586,7 @@ const muscleRegions_Data = computed(() => {
 
 // Workout streak (weeks with >=1 workout)
 const workoutStreakWeeks = computed(() => {
-  const now = new Date();
-  const weeks: Record<string, boolean> = {};
-  for (const w of workouts.value) {
-    const d = new Date((w.start_time || 0) * 1000);
-    weeks[weekKey(d)] = true;
-  }
-  let streak = 0;
-  let current = startOfWeek(now);
-  while (weeks[weekKey(current)]) {
-    streak++;
-    current.setDate(current.getDate() - 7);
-  }
-  return streak;
+  return calculateWorkoutStreakWeeks(workouts.value);
 });
 
 // Most trained exercise
