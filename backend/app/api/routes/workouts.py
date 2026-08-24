@@ -20,7 +20,10 @@ from app.services.workout_cache import (
 
 
 router = APIRouter()
-OAUTH_WORKOUT_PAGE_SIZE = 5
+OAUTH_UPSTREAM_WORKOUT_PAGE_SIZE = 5
+API_KEY_UPSTREAM_WORKOUT_PAGE_SIZE = 10
+DEFAULT_WORKOUT_RESPONSE_LIMIT = 50
+MAX_WORKOUT_RESPONSE_LIMIT = 200
 MAX_WORKOUT_SYNC_PAGES = 2000
 
 
@@ -29,21 +32,23 @@ def get_workouts(
     hevy_access_token: str | None = Cookie(None),
     hevy_api_key: str | None = Cookie(None),
     hevy_session_id: str | None = Cookie(None),
-    offset: int = Query(0, ge=0, description="Pagination offset (increments of 5) - for OAuth2 mode"),
+    offset: int = Query(0, ge=0, description="Cached workout offset - for OAuth2 mode"),
+    limit: int = Query(DEFAULT_WORKOUT_RESPONSE_LIMIT, ge=1, le=MAX_WORKOUT_RESPONSE_LIMIT, description="Cached workouts per response"),
     username: str | None = Query(None, description="Filter by username - for OAuth2 mode"),
     page: int = Query(1, ge=1, description="Page number - for api-key mode"),
-    page_size: int = Query(10, ge=1, le=50, description="Page size - for api-key mode"),
+    page_size: int = Query(DEFAULT_WORKOUT_RESPONSE_LIMIT, ge=1, le=MAX_WORKOUT_RESPONSE_LIMIT, description="Cached workouts per response - for api-key mode"),
 ):
     """
     Get paginated workout history.
 
     **OAuth2 mode (Bearer token):**
-    - **offset**: Pagination offset (0, 5, 10, 15, ...)
+    - **offset**: Cached workout offset
+    - **limit**: Cached workouts per response
     - **username**: Username filter (required)
 
     **API-key mode:**
     - **page**: Page number (default: 1)
-    - **page_size**: Number of workouts per page (default: 10)
+    - **page_size**: Cached workouts per response
 
     Requires authentication cookie (OAuth2 token or API key).
     """
@@ -63,7 +68,7 @@ def get_workouts(
                 requested_offset=page_offset,
                 requested_limit=page_size,
             ):
-                _sync_api_key_workouts(client=client, account_key=account_key, page_size=page_size)
+                _sync_api_key_workouts(client=client, account_key=account_key)
 
             cached_workouts = get_cached_workouts(
                 source="api_key",
@@ -91,7 +96,7 @@ def get_workouts(
                 source="oauth",
                 account_key=account_key,
                 requested_offset=offset,
-                requested_limit=OAUTH_WORKOUT_PAGE_SIZE,
+                requested_limit=limit,
             ):
                 _sync_oauth_workouts(client=client, username=username, account_key=account_key)
 
@@ -100,7 +105,7 @@ def get_workouts(
                     source="oauth",
                     account_key=account_key,
                     offset=offset,
-                    limit=OAUTH_WORKOUT_PAGE_SIZE,
+                    limit=limit,
                 )
             }
 
@@ -116,10 +121,10 @@ def _sync_oauth_workouts(*, client: Any, username: str, account_key: str) -> Non
     source = "oauth"
     stop_on_existing = is_workout_sync_complete(source=source, account_key=account_key)
     workout_count = _workout_count_or_none(client=client, username=username)
-    page_limit = _sync_page_limit(workout_count=workout_count, page_size=OAUTH_WORKOUT_PAGE_SIZE)
+    page_limit = _sync_page_limit(workout_count=workout_count, page_size=OAUTH_UPSTREAM_WORKOUT_PAGE_SIZE)
 
     for page_index in range(page_limit):
-        offset = page_index * OAUTH_WORKOUT_PAGE_SIZE
+        offset = page_index * OAUTH_UPSTREAM_WORKOUT_PAGE_SIZE
         response = client.get_workouts(username=username, offset=offset)
         workouts = _workouts_from_response(response)
         found_existing = store_workouts(source=source, account_key=account_key, workouts=workouts)
@@ -134,14 +139,14 @@ def _sync_oauth_workouts(*, client: Any, username: str, account_key: str) -> Non
     mark_workout_sync(source=source, account_key=account_key, fully_synced=workout_count is not None)
 
 
-def _sync_api_key_workouts(*, client: Any, account_key: str, page_size: int) -> None:
+def _sync_api_key_workouts(*, client: Any, account_key: str) -> None:
     source = "api_key"
     stop_on_existing = is_workout_sync_complete(source=source, account_key=account_key)
     workout_count = _workout_count_or_none(client=client)
-    page_limit = _sync_page_limit(workout_count=workout_count, page_size=page_size)
+    page_limit = _sync_page_limit(workout_count=workout_count, page_size=API_KEY_UPSTREAM_WORKOUT_PAGE_SIZE)
 
     for page in range(1, page_limit + 1):
-        response = client.get_workouts(page=page, page_size=page_size)
+        response = client.get_workouts(page=page, page_size=API_KEY_UPSTREAM_WORKOUT_PAGE_SIZE)
         workouts = _workouts_from_response(response)
         found_existing = store_workouts(source=source, account_key=account_key, workouts=workouts)
 

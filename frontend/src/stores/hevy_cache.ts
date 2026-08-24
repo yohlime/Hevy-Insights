@@ -157,20 +157,21 @@ export const useHevyCache = defineStore("hevyCache", {
         if (isProMode) {
           // PRO API: page-based pagination
           let page = 1;
-          const pageSize = 10;
+          const pageSize = 50;
           const maxPages = 2000;
           
           while (page <= maxPages) {
             if (import.meta.env.DEV) {
               console.debug("[hevyCache] Fetching PRO workouts page:", { page });
             }
-            const result = await workoutService.getWorkouts("", (page - 1) * pageSize);
+            const result = await workoutService.getWorkouts("", (page - 1) * pageSize, pageSize);
             const batch = result.workouts || [];
             if (import.meta.env.DEV) {
               console.debug("[hevyCache] Received PRO batch:", { page, size: batch.length });
             }
             if (batch.length === 0) break;
             allWorkouts.push(...batch);
+            if (batch.length < pageSize) break;
             page += 1;
           }
         } else {
@@ -186,7 +187,7 @@ export const useHevyCache = defineStore("hevyCache", {
           }
 
           let offset = 0;
-          const pageSize = 5;
+          const pageSize = 50;
           const maxPages = 2000;
           let pagesFetched = 0;
           
@@ -194,13 +195,14 @@ export const useHevyCache = defineStore("hevyCache", {
             if (import.meta.env.DEV) {
               console.debug("[hevyCache] Fetching workouts page:", { offset });
             }
-            const result = await workoutService.getWorkouts(this.username!, offset);
+            const result = await workoutService.getWorkouts(this.username!, offset, pageSize);
             const batch = result.workouts || [];
             if (import.meta.env.DEV) {
               console.debug("[hevyCache] Received batch:", { offset, size: batch.length });
             }
             if (batch.length === 0) break;
             allWorkouts.push(...batch);
+            if (batch.length < pageSize) break;
             offset += pageSize;
             pagesFetched += 1;
           }

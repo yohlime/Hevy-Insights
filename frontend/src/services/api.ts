@@ -93,12 +93,12 @@ export const userService = {
 
 // Workout Service
 export const workoutService = {
-  async getWorkouts(username: string, offset: number = 0): Promise<any> {
+  async getWorkouts(username: string, offset: number = 0, limit: number = 50): Promise<any> {
     // Backend determines OAuth2 vs API key mode from cookies
-    // Hevy API-key mode uses page-based pagination
-    const page = Math.floor(offset / 10) + 1;
+    // Backend serves larger cached pages while syncing Hevy with upstream page limits.
+    const page = Math.floor(offset / limit) + 1;
     const response = await api.get("/workouts", {
-      params: { username, offset, page, page_size: 10 },
+      params: { username, offset, limit, page, page_size: limit },
     });
     return parseApiResponse(workoutsResponseSchema, response.data, "/workouts");
   },
