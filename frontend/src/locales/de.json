@@ -50,8 +50,7 @@
   "nav": {
     "brandTextFor": "für",
     "dashboard": "Dashboard",
-    "workoutsCard": "Workouts (Karte)",
-    "workoutsList": "Workouts (Liste)",
+    "workouts": "Workouts",
     "exercises": "Übungen",
     "bodyMeasurements": "Körpermaße",
     "share": "Teilen",
@@ -125,15 +124,21 @@
     }
   },
   "workouts": {
+    "title": "Workouts",
+    "view": {
+      "label": "Ansicht",
+      "card": "Karte",
+      "list": "Liste"
+    },
     "card": {
-      "title": "Workouts (Karte)",
+      "title": "Workouts",
       "subtitle": "Durchsuche deine Workouts im Kartendesign.",
       "totalSets": "Sätze gesamt",
       "set": "Satz",
       "reps": "Wdh."
     },
     "list": {
-      "title": "Workouts (Liste)",
+      "title": "Workouts",
       "subtitle": "Durchsuche deine Workouts im Listenformat mit Aktivitätskalender.",
       "searchContains": "Enthält…",
       "set": "Satz",

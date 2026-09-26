@@ -50,8 +50,7 @@
   "nav": {
     "brandTextFor": "para",
     "dashboard": "Panel",
-    "workoutsCard": "Entrenamientos (Tarjeta)",
-    "workoutsList": "Entrenamientos (Lista)",
+    "workouts": "Entrenamientos",
     "exercises": "Ejercicios",
     "bodyMeasurements": "Medidas Corporales",
     "share": "Compartir",
@@ -125,15 +124,21 @@
     }
   },
   "workouts": {
+    "title": "Entrenamientos",
+    "view": {
+      "label": "Vista",
+      "card": "Tarjeta",
+      "list": "Lista"
+    },
     "card": {
-      "title": "Entrenamientos (Tarjeta)",
+      "title": "Entrenamientos",
       "subtitle": "Explora tus entrenos en diseño de tarjeta.",
       "totalSets": "Series Totales",
       "set": "Serie",
       "reps": "Reps"
     },
     "list": {
-      "title": "Entrenamientos (Lista)",
+      "title": "Entrenamientos",
       "subtitle": "Explora tus entrenos en formato de lista detallada con calendario.",
       "searchContains": "Contiene…",
       "set": "Serie",

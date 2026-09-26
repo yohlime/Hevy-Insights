@@ -52,7 +52,7 @@ Hevy Insights allows you to log in with your Hevy credentials and fetch your wor
   - Authentication tokens are stored in **secure HttpOnly cookies** (not accessible to JavaScript, protecting against XSS attacks)
   - User preferences are stored in your browser's local storage
 - **Dashboard**: Interactive charts and statistics of your workouts, including volume, muscle distribution and hours trained.
-- **Workout History**: Workout logs with detailed exercise information up to the date of account creation - card or list design.
+- **Workout History**: Workout logs with detailed exercise information up to the date of account creation - switch between card and list views.
 - **Exercises**: View all exercises with video thumbnails and detailed stats.
   - **Progressive Overload**: Per-exercise status (progressing, ready to increase, holding, plateau suspected, regressing) with a concrete next-session recommendation such as adding weight or reps
   - **Plateau Detection**: Flags exercises with no meaningful progress across several sessions

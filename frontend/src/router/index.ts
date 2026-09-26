@@ -1,8 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import Login from "../views/Login.vue";
 import Dashboard from "../views/Dashboard.vue";
-import WorkoutsCard from "../views/Workouts_Card.vue";
-import WorkoutsList from "../views/Workouts_List.vue";
+import Workouts from "../views/Workouts.vue";
 import Exercises from "../views/Exercises.vue";
 import Settings from "../views/Settings.vue";
 import Share from "../views/Share.vue";
@@ -32,16 +31,19 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
-      path: "/workouts-card",
-      name: "Workouts_Card",
-      component: WorkoutsCard,
+      path: "/workouts",
+      name: "Workouts",
+      component: Workouts,
       meta: { requiresAuth: true },
+    },
+    // Legacy routes kept for bookmarks/deep links; the view is now a toggle.
+    {
+      path: "/workouts-card",
+      redirect: (to) => ({ path: "/workouts", query: { ...to.query, view: "card" } }),
     },
     {
       path: "/workouts-list",
-      name: "Workouts_List",
-      component: WorkoutsList,
-      meta: { requiresAuth: true },
+      redirect: (to) => ({ path: "/workouts", query: { ...to.query, view: "list" } }),
     },
     {
       path: "/exercises",

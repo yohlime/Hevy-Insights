@@ -50,8 +50,7 @@
   "nav": {
     "brandTextFor": "for",
     "dashboard": "Dashboard",
-    "workoutsCard": "Workouts (Card)",
-    "workoutsList": "Workouts (List)",
+    "workouts": "Workouts",
     "exercises": "Exercises",
     "bodyMeasurements": "Body Measurements",
     "share": "Share",
@@ -125,15 +124,21 @@
     }
   },
   "workouts": {
+    "title": "Workouts",
+    "view": {
+      "label": "View mode",
+      "card": "Card",
+      "list": "List"
+    },
     "card": {
-      "title": "Workouts (Card)",
+      "title": "Workouts",
       "subtitle": "Browse your workouts in a card design.",
       "totalSets": "Total Sets",
       "set": "Set",
       "reps": "Reps"
     },
     "list": {
-      "title": "Workouts (List)",
+      "title": "Workouts",
       "subtitle": "Browse your workouts in a detailed list format with contribution calendar.",
       "searchContains": "Contains…",
       "set": "Set",

@@ -165,13 +165,9 @@ watch(isMobileSidebarOpen, (open) => {
           <span class="nav-icon">📊</span>
           <span class="nav-text">{{ $t('nav.dashboard') }}</span>
         </router-link>
-        <router-link to="/workouts-card" class="nav-item" :title="$t('nav.workoutsCard')">
+        <router-link to="/workouts" class="nav-item" :title="$t('nav.workouts')">
           <span class="nav-icon">🏋️</span>
-          <span class="nav-text">{{ $t('nav.workoutsCard') }}</span>
-        </router-link>
-        <router-link to="/workouts-list" class="nav-item" :title="$t('nav.workoutsList')">
-          <span class="nav-icon">🏋️</span>
-          <span class="nav-text">{{ $t('nav.workoutsList') }}</span>
+          <span class="nav-text">{{ $t('nav.workouts') }}</span>
         </router-link>
         <router-link to="/exercises" class="nav-item" :title="$t('nav.exercises')">
           <span class="nav-icon">📚</span>

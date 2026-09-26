@@ -5,6 +5,7 @@ import { useHevyCache } from "../stores/hevy_cache";
 import { useI18n } from "vue-i18n";
 import { formatDurationFromTimestamps, formatWeight, getWeightUnit, formatPRValue, formatDateTime } from "../utils/formatters";
 import { detectExerciseType, formatDurationSeconds, formatDistance } from "../utils/exerciseTypeDetector";
+import WorkoutsViewToggle from "../components/WorkoutsViewToggle.vue";
 
 const store = useHevyCache();
 const userAccount = computed(() => store.userAccount);
@@ -190,6 +191,9 @@ watch(() => route.query.day, async (d) => {
         </div>
 
         <div class="header-actions">
+          <!-- Card / List view toggle -->
+          <WorkoutsViewToggle />
+
           <!-- Settings Button -->
           <button @click="$router.push('/settings')" class="settings-btn" title="Settings">
             ⚙️
