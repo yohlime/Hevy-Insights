@@ -87,10 +87,10 @@ const router = createRouter({
 });
 
 // Navigation guard to check authentication
-router.beforeEach(async (to, _from, next) => {
- // Check CSV mode from localStorage (client-side only, no backend auth)
+router.beforeEach(async (to) => {
+  // Check CSV mode from localStorage (client-side only, no backend auth)
   const csvMode = localStorage.getItem("hevy_access_token") === "csv_mode";
-  
+
   // Check authentication from backend (for OAuth2 and API key modes)
   let isAuthenticated = csvMode;
   if (!csvMode) {
@@ -102,22 +102,21 @@ router.beforeEach(async (to, _from, next) => {
       isAuthenticated = false;
     }
   }
-  
+
   if (to.meta.requiresAuth && !isAuthenticated) {
-    return next("/login");
+    return "/login";
   }
 
   if (to.path === "/login" && isAuthenticated) {
-    return next("/dashboard");
+    return "/dashboard";
   }
 
   // If route is unmatched (catch-all), send to dashboard or login
-  const isCatchAll = to.name === "NotFoundRedirect";
-  if (isCatchAll) {
-    return next(isAuthenticated ? "/dashboard" : "/login");
+  if (to.name === "NotFoundRedirect") {
+    return isAuthenticated ? "/dashboard" : "/login";
   }
 
-  return next();
+  return true;
 });
 
 export default router;
