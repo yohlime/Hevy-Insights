@@ -1,66 +1,38 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { useHevyCache } from "../stores/hevy_cache";
 import { formatDurationFromTimestamps, formatWeight, getWeightUnit, formatPRValue, formatDateTime } from "../utils/formatters";
 import { detectExerciseType, formatDurationSeconds, formatDistance } from "../utils/exerciseTypeDetector";
-import { useI18n } from "vue-i18n";
 import WorkoutsViewToggle from "../components/WorkoutsViewToggle.vue";
+import { useWorkoutsView, type TimeRange } from "../composables/useWorkoutsView";
 
-const { t } = useI18n();
-const store = useHevyCache();
-const userAccount = computed(() => store.userAccount);
+const {
+  store,
+  userAccount,
+  filterRange,
+  loading,
+  filteredWorkouts,
+  workoutIndex,
+  totalSets,
+  bpmDisplay,
+  caloriesDisplay,
+  exercisePRs,
+  getLocalizedPRType,
+  ensureWorkoutsLoaded,
+} = useWorkoutsView();
 
-// UI state
+// Card-specific UI state
 const currentPage = ref(1);
 const workoutsPerPage = 9; // 3 columns x 3 rows per page
 const expandedExercises = ref<Record<string, boolean>>({}); // exercise.id -> expanded
-const filterRange = ref<"all" | "1w" | "1m" | "3m" | "6m" | "12m">("all");
 
-// Loading + source data
-const loading = computed(() => store.isLoadingWorkouts || store.isLoadingUser);
-const allWorkoutsRaw = computed(() => store.workouts);
-
-// Sort newest → oldest for consistent indexing (#N)
-const allWorkoutsSorted = computed(() => {
-  return [...allWorkoutsRaw.value].sort((a: any, b: any) => (b.start_time || 0) - (a.start_time || 0));
-});
-
-// Filter by date range
-const filteredWorkouts = computed(() => {
-  if (filterRange.value === "all") return allWorkoutsSorted.value;
-  const nowSec = Math.floor(Date.now() / 1000);
-  let days: number;
-  switch (filterRange.value) {
-    case "1w": days = 7; break;
-    case "1m": days = 30; break;
-    case "3m": days = 90; break;
-    case "6m": days = 180; break;
-    case "12m": days = 360; break; // 12 x 30-day months for consistency
-    default: days = 90; // fallback
-  }
-  const cutoff = nowSec - days * 24 * 3600;
-  return allWorkoutsSorted.value.filter((w: any) => (w.start_time || 0) >= cutoff);
-});
-
-// Pagination on filtered set
 const paginatedWorkouts = computed(() => {
   const start = (currentPage.value - 1) * workoutsPerPage;
-  const end = start + workoutsPerPage;
-  return filteredWorkouts.value.slice(start, end);
+  return filteredWorkouts.value.slice(start, start + workoutsPerPage);
 });
 
 const totalPages = computed(() => Math.ceil(filteredWorkouts.value.length / workoutsPerPage) || 1);
 const hasMore = computed(() => currentPage.value < totalPages.value);
 const hasPrev = computed(() => currentPage.value > 1);
-
-// Compute global index number (#N): oldest = #1, newest = #total
-const workoutIndex = (workoutId: string) => {
-  const idx = allWorkoutsSorted.value.findIndex((w: any) => w.id === workoutId);
-  if (idx < 0) return "?";
-  const total = allWorkoutsSorted.value.length;
-  // Newest should have the highest number
-  return total - idx;
-};
 
 const nextPage = () => { if (hasMore.value) currentPage.value++; };
 const prevPage = () => { if (hasPrev.value) currentPage.value--; };
@@ -68,70 +40,23 @@ const firstPage = () => { currentPage.value = 1; };
 const lastPage = () => { currentPage.value = totalPages.value; };
 
 const formatDate = (timestamp: number) => formatDateTime(new Date(timestamp * 1000));
-
-// Helpers for additional stats
-const totalSets = (workout: any) => {
-  return (workout.exercises || []).reduce((sum: number, ex: any) => sum + ((ex.sets || []).length), 0);
-};
-// Biometrics from Hevy API payload
-const biometrics = (workout: any) => {
-  const bio = workout?.biometrics;
-  if (!bio || typeof bio !== "object") return null;
-  const hasData = typeof bio.total_calories === "number" || typeof bio.average_heart_rate === "number";
-  return hasData ? bio : null;
-};
-const bpmDisplay = (workout: any) => {
-  const bio = biometrics(workout);
-  const bpm = bio?.average_heart_rate;
-  return typeof bpm === "number" ? `${Math.round(bpm)} bpm` : null;
-};
-const caloriesDisplay = (workout: any) => {
-  const bio = biometrics(workout);
-  const cal = bio?.total_calories;
-  return typeof cal === "number" ? `${Math.round(cal)} kcal` : null;
-};
-
-// PR helpers based on sets.prs / sets.personalRecords
-type PRItem = { type: string; value: number | string };
-const extractSetPRs = (set: any): PRItem[] => {
-  const prsArr = Array.isArray(set?.prs) ? set.prs : (set?.prs ? [set.prs] : []);
-  const personalArr = Array.isArray(set?.personalRecords) ? set.personalRecords : (set?.personalRecords ? [set.personalRecords] : []);
-  const all = [...prsArr, ...personalArr].filter(Boolean).map((p: any) => ({ type: String(p.type || ''), value: p.value }));
-  return all.filter(p => p.type);
-};
-const exercisePRs = (exercise: any): PRItem[] => {
-  const sets = Array.isArray(exercise?.sets) ? exercise.sets : [];
-  const items: PRItem[] = [];
-  for (const s of sets) items.push(...extractSetPRs(s));
-  const seen = new Set<string>();
-  return items.filter(it => { const k = `${it.type}|${it.value}`; if (seen.has(k)) return false; seen.add(k); return true; });
-};
 const exerciseHasPR = (exercise: any) => exercisePRs(exercise).length > 0;
-// Note: set-level highlighting reverted per request; keep extractor for future use if needed
-
-// Translate PR type names using i18n keys
-function getLocalizedPRType(prType: string): string {
-  const key = `dashboard.prTypes.${prType}`;
-  const translation = t(key);
-  if (translation === key) return prType.split("_").join(" ");
-  return translation;
-}
 
 const toggleExercise = (exerciseId: string) => {
   // Create a new object to ensure reactivity
   expandedExercises.value = {
     ...expandedExercises.value,
-    [exerciseId]: !expandedExercises.value[exerciseId]
+    [exerciseId]: !expandedExercises.value[exerciseId],
   };
 };
 
-const onChangeFilter = (val: "all"|"1w"|"1m"|"3m"|"6m"|"12m") => {
+const onChangeFilter = (val: TimeRange) => {
   filterRange.value = val;
   currentPage.value = 1;
 };
 
 onMounted(async () => {
-  await store.fetchWorkouts(); // Fetch all workouts
+  await ensureWorkoutsLoaded();
 });
 </script>
 

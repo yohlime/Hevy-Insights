@@ -1,58 +1,36 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from "vue";
 import { useRoute } from "vue-router";
-import { useHevyCache } from "../stores/hevy_cache";
-import { useI18n } from "vue-i18n";
 import { formatDurationFromTimestamps, formatWeight, getWeightUnit, formatPRValue, formatDateTime } from "../utils/formatters";
 import { detectExerciseType, formatDurationSeconds, formatDistance } from "../utils/exerciseTypeDetector";
 import WorkoutsViewToggle from "../components/WorkoutsViewToggle.vue";
+import { useWorkoutsView } from "../composables/useWorkoutsView";
 
-const store = useHevyCache();
-const userAccount = computed(() => store.userAccount);
-const { t } = useI18n();
+const {
+  store,
+  userAccount,
+  t,
+  filterRange,
+  loading,
+  filteredWorkouts,
+  workoutIndex,
+  totalSets,
+  bpmDisplay,
+  caloriesDisplay,
+  extractSetPRs,
+  exercisePRs,
+  getLocalizedPRType,
+  ensureWorkoutsLoaded,
+} = useWorkoutsView();
+
 const route = useRoute();
 
-// UI state
-const filterRange = ref<"all" | "1w" | "1m" | "3m" | "6m" | "12m">("all");
+// List-specific UI state
 const expanded = ref<Record<string, boolean>>({});
-
-// Loading + source data
-const loading = computed(() => store.isLoadingWorkouts || store.isLoadingUser);
-const allWorkoutsRaw = computed(() => store.workouts);
-
-// Sort newest → oldest
-const allWorkoutsSorted = computed(() => {
-  return [...allWorkoutsRaw.value].sort((a: any, b: any) => (b.start_time || 0) - (a.start_time || 0));
-});
-
-// Global workout index (#N): oldest = #1, newest = #total
-const workoutIndex = (workoutId: string) => {
-  const idx = allWorkoutsSorted.value.findIndex((w: any) => w.id === workoutId);
-  if (idx < 0) return "?";
-  const total = allWorkoutsSorted.value.length;
-  return total - idx;
-};
-
-// Filter by date range
-const filteredWorkouts = computed(() => {
-  if (filterRange.value === "all") return allWorkoutsSorted.value;
-  const nowSec = Math.floor(Date.now() / 1000);
-  let days: number;
-  switch (filterRange.value) {
-    case "1w": days = 7; break;
-    case "1m": days = 30; break;
-    case "3m": days = 90; break;
-    case "6m": days = 180; break;
-    case "12m": days = 360; break;
-    default: days = 90;
-  }
-  const cutoff = nowSec - days * 24 * 3600;
-  return allWorkoutsSorted.value.filter((w: any) => (w.start_time || 0) >= cutoff);
-});
 
 // Extra filters
 const filters = ref<{ workoutNumber: number | null; workoutName: string }>(
-  { workoutNumber: null, workoutName: '' }
+  { workoutNumber: null, workoutName: "" }
 );
 
 // Debounced workout name search
@@ -60,13 +38,13 @@ let workoutNameDebounceTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function handleWorkoutNameInput(event: Event) {
   const value = (event.target as HTMLInputElement).value;
-  
+
   // Clear existing timeout
   if (workoutNameDebounceTimeout) {
     clearTimeout(workoutNameDebounceTimeout);
   }
-  
-  // Set new timeout - only update filters.workoutName after 300ms of no typing
+
+  // Only update filters.workoutName after 300ms of no typing
   workoutNameDebounceTimeout = setTimeout(() => {
     filters.value.workoutName = value;
   }, 300);
@@ -92,46 +70,13 @@ const formatDateFull = (timestamp: number) => {
   const d = new Date(timestamp * 1000);
   const days = [t("global.days.sundayLong"), t("global.days.mondayLong"), t("global.days.tuesdayLong"), t("global.days.wednesdayLong"), t("global.days.thursdayLong"), t("global.days.fridayLong"), t("global.days.saturdayLong")];
   const dayName = days[d.getDay()];
-  
+
   // Use the shared formatDateTime utility, but extract date and time separately to insert day name
   const formattedDateTime = formatDateTime(d);
-  
+
   return `${dayName}, ${formattedDateTime}`;
 };
 
-const biometrics = (workout: any) => {
-  const bio = workout?.biometrics;
-  if (!bio || typeof bio !== "object") return null;
-  const hasData = typeof bio.total_calories === "number" || typeof bio.average_heart_rate === "number";
-  return hasData ? bio : null;
-};
-const bpmDisplay = (workout: any) => {
-  const bio = biometrics(workout);
-  const bpm = bio?.average_heart_rate;
-  return typeof bpm === "number" ? `${Math.round(bpm)} bpm` : null;
-};
-const caloriesDisplay = (workout: any) => {
-  const bio = biometrics(workout);
-  const cal = bio?.total_calories;
-  return typeof cal === "number" ? `${Math.round(cal)} kcal` : null;
-};
-const totalSets = (workout: any) => (workout.exercises || []).reduce((s: number, ex: any) => s + ((ex.sets || []).length), 0);
-
-// PR helpers using sets.prs / sets.personalRecords
-type PRItem = { type: string; value: number | string };
-const extractSetPRs = (set: any): PRItem[] => {
-  const prsArr = Array.isArray(set?.prs) ? set.prs : (set?.prs ? [set.prs] : []);
-  const personalArr = Array.isArray(set?.personalRecords) ? set.personalRecords : (set?.personalRecords ? [set.personalRecords] : []);
-  const all = [...prsArr, ...personalArr].filter(Boolean).map((p: any) => ({ type: String(p.type || ''), value: p.value }));
-  return all.filter(p => p.type);
-};
-const exercisePRs = (exercise: any): PRItem[] => {
-  const sets = Array.isArray(exercise?.sets) ? exercise.sets : [];
-  const items: PRItem[] = [];
-  for (const s of sets) items.push(...extractSetPRs(s));
-  const seen = new Set<string>();
-  return items.filter(it => { const k = `${it.type}|${it.value}`; if (seen.has(k)) return false; seen.add(k); return true; });
-};
 const setHasPR = (set: any) => extractSetPRs(set).length > 0;
 const workoutPRCount = (workout: any) => {
   let count = 0;
@@ -141,15 +86,6 @@ const workoutPRCount = (workout: any) => {
   return count;
 };
 
-// Translate PR type names using i18n keys
-function getLocalizedPRType(prType: string): string {
-  const key = `dashboard.prTypes.${prType}`;
-  const translation = t(key);
-  if (translation === key) return prType.split("_").join(" ");
-  return translation;
-}
-
-// Contribution graph (heatmap) data by day
 // Auto-expand and scroll to workouts on a given day
 const scrollToDay = async (day: string) => {
   // Find workouts in the current filtered/search list that match the date
@@ -168,7 +104,7 @@ const scrollToDay = async (day: string) => {
 const toggleItem = (id: string) => { expanded.value[id] = !expanded.value[id]; };
 
 onMounted(async () => {
-  await store.fetchWorkouts();
+  await ensureWorkoutsLoaded();
   const dayParam = route.query.day;
   if (dayParam) await scrollToDay(String(dayParam));
 });
