@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { userService, workoutService, authService } from "../services/api";
+import { userService, workoutService, authService, routineService } from "../services/api";
 
 interface UserAccount {
   id?: string | number;
@@ -13,6 +13,13 @@ interface UserAccount {
 interface Workout {
   id: string;
   [key: string]: any;
+}
+
+// Prescribed reps for an exercise template, derived from the user's routines
+export interface RoutineRepTarget {
+  targetReps: number;
+  setCount: number;
+  routineTitle?: string;
 }
 
 // Equipment/Vendor configuration for exercise variants
@@ -50,6 +57,9 @@ export const useHevyCache = defineStore("hevyCache", {
     graphAxisFormat: (localStorage.getItem("graph_axis_format") || "short") as "numeric" | "short" | "long",
     userHeight: parseFloat(localStorage.getItem("user_height") || "0"),
     equipmentConfigs: loadEquipmentConfigs() as EquipmentConfig[],
+    routineRepTargets: {} as Record<string, RoutineRepTarget>,
+    routineTargetsFetchedAt: null as number | null,
+    isLoadingRoutineTargets: false,
   }),
 
   getters: {
@@ -81,6 +91,9 @@ export const useHevyCache = defineStore("hevyCache", {
       const fiveMinutes = 5 * 60 * 1000;
       return Date.now() - state.workoutsLastFetched > fiveMinutes;
     },
+    // Prescribed rep target for an exercise template (from routines), if any
+    getRoutineTarget: (state) => (templateId?: string | null): RoutineRepTarget | null =>
+      templateId ? state.routineRepTargets[templateId] ?? null : null,
   },
 
   actions: {
@@ -226,6 +239,68 @@ export const useHevyCache = defineStore("hevyCache", {
       }
     },
 
+    // Derive prescribed rep targets per exercise template from the routines
+    // referenced by the user's workouts. Routines are optional: any failure
+    // degrades gracefully to history-inferred targets.
+    async fetchRoutineRepTargets(force = false) {
+      if (this.dataSource === "csv") return this.routineRepTargets;
+
+      const fiveMinutes = 5 * 60 * 1000;
+      if (!force && this.routineTargetsFetchedAt && Date.now() - this.routineTargetsFetchedAt < fiveMinutes) {
+        return this.routineRepTargets;
+      }
+
+      const routineIds = Array.from(
+        new Set(
+          this.workouts
+            .map((workout) => workout.routine_id)
+            .filter((id): id is string => typeof id === "string" && id.length > 0),
+        ),
+      ).slice(0, 50);
+
+      if (routineIds.length === 0) {
+        this.routineRepTargets = {};
+        this.routineTargetsFetchedAt = Date.now();
+        return this.routineRepTargets;
+      }
+
+      this.isLoadingRoutineTargets = true;
+      const targets: Record<string, RoutineRepTarget> = {};
+
+      await Promise.all(
+        routineIds.map(async (routineId) => {
+          try {
+            const response = await routineService.getRoutine(routineId);
+            const routine = response?.routine;
+            const exercises = Array.isArray(routine?.exercises) ? routine.exercises : [];
+            for (const exercise of exercises) {
+              const templateId = exercise?.exercise_template_id;
+              if (typeof templateId !== "string" || !templateId) continue;
+              const sets = Array.isArray(exercise?.sets) ? exercise.sets : [];
+              const reps = sets
+                .map((set: any) => Number(set?.reps))
+                .filter((value: number) => Number.isFinite(value) && value > 0);
+              if (reps.length === 0) continue;
+              const targetReps = Math.max(...reps);
+              const existing = targets[templateId];
+              if (!existing || targetReps > existing.targetReps) {
+                targets[templateId] = { targetReps, setCount: reps.length, routineTitle: routine?.title };
+              }
+            }
+          } catch (error) {
+            if (import.meta.env.DEV) {
+              console.debug("[hevyCache] Failed to fetch routine targets:", routineId, error);
+            }
+          }
+        }),
+      );
+
+      this.routineRepTargets = targets;
+      this.routineTargetsFetchedAt = Date.now();
+      this.isLoadingRoutineTargets = false;
+      return this.routineRepTargets;
+    },
+
     loadCSVWorkouts(workouts: Workout[]) {
       this.dataSource = "csv";
       this.workouts = workouts;
@@ -238,6 +313,8 @@ export const useHevyCache = defineStore("hevyCache", {
       this.dataSource = "api";
       this.workouts = [];
       this.workoutsLastFetched = null;
+      this.routineRepTargets = {};
+      this.routineTargetsFetchedAt = null;
       localStorage.setItem("data_source", "api");
       localStorage.removeItem("csv_workouts");
     },
@@ -245,6 +322,8 @@ export const useHevyCache = defineStore("hevyCache", {
     clearCache() {
       this.workouts = [];
       this.workoutsLastFetched = null;
+      this.routineRepTargets = {};
+      this.routineTargetsFetchedAt = null;
       if (this.dataSource === "csv") {
         localStorage.removeItem("csv_workouts");
       }
@@ -254,6 +333,8 @@ export const useHevyCache = defineStore("hevyCache", {
       this.userAccount = null;
       this.workouts = [];
       this.workoutsLastFetched = null;
+      this.routineRepTargets = {};
+      this.routineTargetsFetchedAt = null;
       this.error = null;
       this.dataSource = "api";
       localStorage.removeItem("data_source");
