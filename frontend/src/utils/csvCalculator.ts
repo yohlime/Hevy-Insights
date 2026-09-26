@@ -8,6 +8,8 @@
  * 4. Ranking: Sorts exercises by total workload (volume).
 **/
 
+import { estimate1RM } from "./progressiveOverload";
+
 export interface Workout {
   id: string;
   title: string;
@@ -158,7 +160,7 @@ export function calculatePRsOverTime(workouts: Workout[]): Array<{ date: string;
 
         if (weight > 0 && reps > 0) {
           // 1. Estimated 1RM (Epley: weight * (1 + reps/30))
-          const estimated1RM = weight * (1 + reps / 30);
+          const estimated1RM = estimate1RM(weight, reps);
           if (estimated1RM > currentPRs.max1RM) {
             currentPRs.max1RM = estimated1RM;
             prCount++;
@@ -242,7 +244,7 @@ export function calculatePRsGrouped(
         let prCount = 0;
 
         if (weight > 0 && reps > 0) {
-          const estimated1RM = weight * (1 + reps / 30);
+          const estimated1RM = estimate1RM(weight, reps);
           if (estimated1RM > currentPRs.max1RM) {
             currentPRs.max1RM = estimated1RM;
             prCount++;
