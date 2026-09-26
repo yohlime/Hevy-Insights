@@ -23,7 +23,7 @@ Hevy Insights allows you to log in with your Hevy credentials and fetch your wor
 # Table of Contents <!-- omit from toc -->
 
 - [Features](#features)
-  - [Plateau \& Strength Detection](#plateau--strength-detection)
+  - [Progressive Overload \& Plateau Detection](#progressive-overload--plateau-detection)
   - [Multi-Vendor Support](#multi-vendor-support)
 - [Screenshots](#screenshots)
 - [Login Comparison](#login-comparison)
@@ -54,46 +54,40 @@ Hevy Insights allows you to log in with your Hevy credentials and fetch your wor
 - **Dashboard**: Interactive charts and statistics of your workouts, including volume, muscle distribution and hours trained.
 - **Workout History**: Workout logs with detailed exercise information up to the date of account creation - card or list design.
 - **Exercises**: View all exercises with video thumbnails and detailed stats.
-  - **Plateau Detection**: Automatically detects when your performance has plateaued on an exercise
-  - **Strength Tracking**: Shows if you're gaining or losing strength over your recent sessions
+  - **Progressive Overload**: Per-exercise status (progressing, ready to increase, holding, plateau suspected, regressing) with a concrete next-session recommendation such as adding weight or reps
+  - **Plateau Detection**: Flags exercises with no meaningful progress across several sessions
   - **Multi-Vendor Support**: Track the same exercise even if trained with different vendors (e.g. Chest Flys from Gym A and Gym B) without mixing progress or stats.
 - **Body Measurements**: Track your weight and body fat percentage over time with interactive charts.
 - **Custom Settings**: Individualize your experience when using Hevy Insights.
 - **Languages**: Language support for 🇺🇸, 🇩🇪 and 🇪🇸.
 
-## Plateau & Strength Detection
+## Progressive Overload & Plateau Detection
 
-Hevy Insights includes an intelligent analysis system that tracks your performance across the last 5 sessions (configurable) for each exercise and provides real-time feedback:
+Hevy Insights analyzes each exercise across recent training sessions ("exposures") and reports both a **status** and a concrete **recommendation**. The analysis is exposure-based, so calendar gaps (e.g. training an exercise every other week) do not distort the trend.
 
-### Detection Types <!-- omit from toc -->
+### Statuses <!-- omit from toc -->
 
-- **🟡 Plateau**: Your performance has stayed relatively consistent
-  - Triggered when weight stays within **~0.5kg** and reps within **~1 rep** across at least 5 sessions
-  
-- **🟢 Gaining Strength**: You're making progress!
-  - Triggered when weight increases by **>2kg** OR reps increase by **>2** (with stable/increasing weight) across at least 5 sessions
-  
-- **🔴 Declining Strength**: Performance is decreasing
-  - Triggered when weight decreases by **>2kg** OR reps decrease by **>2** (with stable/ decreasing weight) across at least 5 sessions
-  
-- **⚪ Insufficient Data**: Not enough workout history yet
-  - Displayed when an exercise has been performed fewer than **5 times**
+- **📈 Progressing**: e1RM, reps or volume is trending up beyond measurement noise
+- **🎯 Ready to increase**: all working sets reached the top of the target rep range at a stable load
+- **➡️ Holding**: performance is stable, but for fewer exposures than the plateau threshold
+- **⏸️ Plateau suspected**: no meaningful new best across several consecutive exposures
+- **📉 Regressing**: performance is declining across recent exposures
+- **🔄 Returning**: the exercise was not trained in a long time, so old sessions are not compared directly
+- **⚪ Insufficient data**: not enough workout history yet
+
+### Recommendations <!-- omit from toc -->
+
+Each status maps to an action: add weight, add reps, hold, deload, resume, or build more history. Load increases are capped at **10% per week** and rounded to a sensible plate increment; assisted exercises progress by reducing assistance. Cardio exercises progress by distance or duration instead.
 
 ### How It Works <!-- omit from toc -->
 
-The analysis algorithm:
+1. Collects the last N sessions (configurable, default 5) for each exercise
+2. Tracks top-set weight and reps, estimated 1RM (Epley), volume, and RPE per session
+3. Fits a trend over exposures and counts consecutive sessions without a new best
+4. Treats a rep drop after a load increase as progression, not regression
+5. Displays the status and recommendation on each exercise card
 
-1. Collects data from your last N workout sessions for each exercise
-2. Tracks the **maximum weight** and **reps at max weight** for each session
-3. Compares the first half of sessions against the second half to identify trends
-4. Displays a colored badge on each exercise card with the current status
-
-This feature helps you identify when it's time to:
-
-- **Increase weight** (when plateaued)
-- **Celebrate progress** (when gaining)
-- **Take recovery time** or **check form** (when declining)
-- **Build more history** (when insufficient data)
+**Target rep range:** when you train an exercise from a Hevy routine, the prescribed reps are read from your routines and used as the top of the target range ("double progression"). Otherwise the range is inferred from your history. Routine targets require an OAuth (Hevy credentials) login; PRO API-key sessions use inferred targets.
 
 ## Multi-Vendor Support
 
