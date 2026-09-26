@@ -168,22 +168,43 @@
       "statsHeader": "Estadísticas",
       "totalSessions": "Sesiones Totales"
     },
-    "insights": {
-      "plateauBadge": "Estancado",
-      "gainingBadge": "Mejorando",
-      "losingBadge": "Bajando",
-      "insufficientBadge": "Nuevo",
-      "inactiveBadge": "Inactivo",
-      "maintainingBadge": "Manteniendo",
-      "plateau": "Tu serie principal se ha mantenido en {weight} para {repsMin}-{repsMax} reps. ¡Prueba a subir peso o reps para romper el estancamiento!",
-      "plateauCardio": "Tu rendimiento se ha estancado en {metric}. ¡Prueba a aumentar la distancia o el ritmo!",
-      "gaining": "¡Has aumentado {weightChange} o {repsChange} reps respecto a tus últimas {sessions} sesiones!",
-      "gainingCardio": "¡Gran progreso! ¡Has mejorado un {change}% en tus últimas {sessions} sesiones!",
-      "losing": "El rendimiento bajó en {weightChange} o {repsChange} reps en tus últimas {sessions} sesiones. Considera descansar o revisar la técnica.",
-      "losingCardio": "El rendimiento bajó un {change}% en tus últimas {sessions} sesiones. Considera descansar o revisar tu entrenamiento.",
-      "insufficient": "Datos insuficientes. Necesitas al menos {needed} sesiones, actualmente tienes {sessions}.",
-      "inactive": "Sin entrenar en {days} días. ¡Retoma el entreno para ver tu progreso!",
-      "maintaining": "Rendimiento estable. Estás manteniendo tu nivel de fuerza actual."
+    "overload": {
+      "title": "Sobrecarga progresiva",
+      "increaseWeight": "Próxima sesión: sube peso — objetivo {weight} {unit} × {reps} reps",
+      "reduceAssistance": "Próxima sesión: reduce la asistencia — objetivo {weight} {unit} × {reps} reps",
+      "addReps": "Próxima sesión: mantén {weight} {unit} y busca {reps} reps",
+      "increaseDistance": "Próxima sesión: apunta a {distance} {unit}",
+      "increaseDuration": "Próxima sesión: apunta a {duration}",
+      "deload": "Considera una descarga: reduce la carga a unos {weight} {unit} y prioriza la recuperación.",
+      "hold": "Mantén tu nivel actual y progresa de forma gradual.",
+      "resume": "Retoma el entrenamiento antes de comparar con sesiones antiguas.",
+      "buildBase": "Acumula algunas sesiones más antes de evaluar la progresión.",
+      "routineTarget": "Objetivo de la rutina: hasta {reps} reps",
+      "status": {
+        "progressing": "Progresando",
+        "ready_to_increase": "Listo para subir",
+        "holding": "Manteniendo",
+        "plateau_suspected": "Posible estancamiento",
+        "regressing": "En descenso",
+        "returning": "Retomando",
+        "insufficient": "Datos insuficientes"
+      },
+      "confidence": {
+        "low": "Confianza baja",
+        "medium": "Confianza media",
+        "high": "Confianza alta"
+      },
+      "reasons": {
+        "inactive": "Llevas tiempo sin entrenarlo — empieza ligera y reconstruye.",
+        "insufficient": "Aún no hay suficientes sesiones para recomendar una sobrecarga.",
+        "plateau_ready_for_load": "Has alcanzado tu objetivo de reps repetidamente — es hora de añadir carga.",
+        "plateau_build_reps": "El peso es estable — sube reps antes de añadir carga.",
+        "two_for_two": "Superaste tu objetivo de reps dos sesiones seguidas (regla 2-por-2) — añade carga.",
+        "gaining": "Estás progresando — mantén el ritmo actual.",
+        "gaining_fast": "El progreso es rápido; no añadas más del 10% por semana para evitar el sobreentrenamiento.",
+        "losing": "El rendimiento baja — descarga y recupera antes de sobrecargar.",
+        "holding": "El rendimiento es estable con esta carga — manténla y busca sumar reps."
+      }
     },
     "graphs": {
       "maxWeight": "Peso Máximo (Tiempo)",

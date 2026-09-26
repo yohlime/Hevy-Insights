@@ -168,22 +168,43 @@
       "statsHeader": "Stats",
       "totalSessions": "Total Sessions"
     },
-    "insights": {
-      "plateauBadge": "Plateau",
-      "gainingBadge": "Gaining",
-      "losingBadge": "Declining",
-      "insufficientBadge": "New",
-      "inactiveBadge": "Inactive",
-      "maintainingBadge": "Maintaining",
-      "plateau": "Your top set has hovered around {weight} for {repsMin}-{repsMax} reps. Try adding more weight or reps to break the plateau!",
-      "plateauCardio": "Your performance has plateaued around {metric}. Try increasing distance or pace!",
-      "gaining": "You've increased by {weightChange} or {repsChange} reps over your last {sessions} sessions!",
-      "gainingCardio": "Great progress! You've improved by {change}% over your last {sessions} sessions!",
-      "losing": "Performance decreased by {weightChange} or {repsChange} reps over your last {sessions} sessions. Consider rest or form check.",
-      "losingCardio": "Performance decreased by {change}% over your last {sessions} sessions. Consider rest or check your training.",
-      "insufficient": "Not enough data yet. Need at least {needed} sessions, currently have {sessions}.",
-      "inactive": "Not trained in {days} days. Resume training to track progress!",
-      "maintaining": "Performance is stable. You're maintaining your current strength level."
+    "overload": {
+      "title": "Progressive Overload",
+      "increaseWeight": "Next session: add weight — target {weight} {unit} × {reps} reps",
+      "reduceAssistance": "Next session: reduce assistance — target {weight} {unit} × {reps} reps",
+      "addReps": "Next session: keep {weight} {unit} and aim for {reps} reps",
+      "increaseDistance": "Next session: aim for {distance} {unit}",
+      "increaseDuration": "Next session: aim for {duration}",
+      "deload": "Consider a deload: reduce the load to about {weight} {unit} and focus on recovery.",
+      "hold": "Stay at your current level and keep progressing gradually.",
+      "resume": "Resume training before comparing to old sessions.",
+      "buildBase": "Build a few more sessions before tracking progression.",
+      "routineTarget": "Routine target: up to {reps} reps",
+      "status": {
+        "progressing": "Progressing",
+        "ready_to_increase": "Ready to increase",
+        "holding": "Holding",
+        "plateau_suspected": "Plateau suspected",
+        "regressing": "Regressing",
+        "returning": "Returning",
+        "insufficient": "Insufficient data"
+      },
+      "confidence": {
+        "low": "Low confidence",
+        "medium": "Medium confidence",
+        "high": "High confidence"
+      },
+      "reasons": {
+        "inactive": "You haven't trained this in a while — start light and rebuild.",
+        "insufficient": "Not enough sessions yet to recommend an overload.",
+        "plateau_ready_for_load": "You've reached your rep target repeatedly — time to add load.",
+        "plateau_build_reps": "Weight is stable — build up reps before adding load.",
+        "two_for_two": "You beat your rep target two sessions in a row (2-for-2 rule) — add load.",
+        "gaining": "You're progressing — keep the current pace.",
+        "gaining_fast": "Progress is fast; avoid adding more than 10% per week to prevent overreaching.",
+        "losing": "Performance is dropping — deload and recover before overloading.",
+        "holding": "Performance is steady at this load — keep it there and aim to add reps."
+      }
     },
     "graphs": {
       "maxWeight": "Max Weight (Over Time)",

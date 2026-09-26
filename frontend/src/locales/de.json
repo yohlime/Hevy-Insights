@@ -168,22 +168,43 @@
       "statsHeader": "Statistiken",
       "totalSessions": "Sitzungen gesamt"
     },
-    "insights": {
-      "plateauBadge": "Plateau",
-      "gainingBadge": "Steigerung",
-      "losingBadge": "Rückgang",
-      "insufficientBadge": "Neu",
-      "inactiveBadge": "Inaktiv",
-      "maintainingBadge": "Erhalt",
-      "plateau": "Dein Top-Satz stagniert bei {weight} für {repsMin}-{repsMax} Wiederholungen. Versuche mehr Gewicht oder Wiederholungen, um das Plateau zu brechen!",
-      "plateauCardio": "Deine Leistung stagniert bei {metric}. Versuche die Distanz oder das Tempo zu erhöhen!",
-      "gaining": "Du hast dich um {weightChange} oder {repsChange} Wiederholungen gegenüber deinen letzten {sessions} Sitzungen gesteigert!",
-      "gainingCardio": "Toller Fortschritt! Du hast dich in den letzten {sessions} Sitzungen um {change}% verbessert!",
-      "losing": "Die Leistung sank um {weightChange} oder {repsChange} Wiederholungen in den letzten {sessions} Sitzungen. Erholung oder Technik-Check empfohlen.",
-      "losingCardio": "Die Leistung sank um {change}% in den letzten {sessions} Sitzungen. Erholung oder Trainingsplan prüfen.",
-      "insufficient": "Noch nicht genügend Daten. Erfordert mindestens {needed} Sitzungen, aktuell {sessions}.",
-      "inactive": "Seit {days} Tagen nicht trainiert. Nimm das Training wieder auf, um Fortschritte zu verfolgen!",
-      "maintaining": "Die Leistung ist stabil. Du hältst dein aktuelles Kraftniveau."
+    "overload": {
+      "title": "Progressive Überlastung",
+      "increaseWeight": "Nächste Sitzung: Gewicht erhöhen — Ziel {weight} {unit} × {reps} Wdh.",
+      "reduceAssistance": "Nächste Sitzung: Unterstützung reduzieren — Ziel {weight} {unit} × {reps} Wdh.",
+      "addReps": "Nächste Sitzung: {weight} {unit} halten und {reps} Wdh. anstreben",
+      "increaseDistance": "Nächste Sitzung: {distance} {unit} anstreben",
+      "increaseDuration": "Nächste Sitzung: {duration} anstreben",
+      "deload": "Erwäge eine Deload: Last auf etwa {weight} {unit} reduzieren und Erholung fokussieren.",
+      "hold": "Bleib auf deinem aktuellen Niveau und steigere dich schrittweise.",
+      "resume": "Nimm das Training wieder auf, bevor du mit alten Sitzungen vergleichst.",
+      "buildBase": "Sammle einige weitere Sitzungen, bevor du den Fortschritt bewertest.",
+      "routineTarget": "Routine-Ziel: bis zu {reps} Wdh.",
+      "status": {
+        "progressing": "Fortschritt",
+        "ready_to_increase": "Bereit zu steigern",
+        "holding": "Halten",
+        "plateau_suspected": "Plateau vermutet",
+        "regressing": "Rückläufig",
+        "returning": "Wiedereinstieg",
+        "insufficient": "Unzureichende Daten"
+      },
+      "confidence": {
+        "low": "Geringe Sicherheit",
+        "medium": "Mittlere Sicherheit",
+        "high": "Hohe Sicherheit"
+      },
+      "reasons": {
+        "inactive": "Lange nicht trainiert — starte leicht und baue wieder auf.",
+        "insufficient": "Noch nicht genügend Sitzungen für eine Überlastungsempfehlung.",
+        "plateau_ready_for_load": "Du erreichst dein Wiederholungsziel wiederholt — Zeit, Last hinzuzufügen.",
+        "plateau_build_reps": "Gewicht ist stabil — baue Wiederholungen auf, bevor du Last hinzufügst.",
+        "two_for_two": "Du hast dein Wiederholungsziel zwei Sitzungen in Folge übertroffen (2-für-2-Regel) — Last hinzufügen.",
+        "gaining": "Du machst Fortschritte — halte das aktuelle Tempo.",
+        "gaining_fast": "Der Fortschritt ist schnell; erhöhe nicht mehr als 10% pro Woche, um Überlastung zu vermeiden.",
+        "losing": "Die Leistung sinkt — Deload und Erholung vor weiterer Überlastung.",
+        "holding": "Die Leistung ist auf diesem Gewicht stabil — halte sie und baue Wiederholungen auf."
+      }
     },
     "graphs": {
       "maxWeight": "Max. Gewicht (Zeitverlauf)",

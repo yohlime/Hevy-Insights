@@ -3,6 +3,7 @@ import { computed, ref, onMounted } from "vue";
 import { useHevyCache } from "../stores/hevy_cache";
 import { formatWeight, getWeightUnit, getDistanceUnit, formatPRValue, formatDate } from "../utils/formatters";
 import { detectExerciseType, formatDurationSeconds, formatDistance, isBodyweightExercise } from "../utils/exerciseTypeDetector";
+import { analyzeProgression, estimate1RM } from "../utils/progressiveOverload";
 import { Scatter, Bar, Line } from "vue-chartjs";
 import { useI18n } from "vue-i18n";
 import { authService } from "../services/api";
@@ -84,8 +85,8 @@ function handleSearchInput(event: Event) {
   }, 300);
 }
 
-// Plateau filter state
-const plateauFilter = ref<string | null>(null);
+// Progression status filter state (progressing / ready_to_increase / plateau_suspected / regressing)
+const statusFilter = ref<string | null>(null);
 
 // Graph filters per exercise (stores timeRange and chartType for each graph)
 type GraphRange = 30 | 60 | 90 | 365 | 0; // days, 0 = all time
@@ -181,6 +182,13 @@ onMounted(async () => {
       console.log("Body measurements not available:", error);
     }
   }
+
+  // Load prescribed rep targets from routines (OAuth only; PRO API keys cannot read routines)
+  if (!isUsingProApi.value) {
+    store.fetchRoutineRepTargets().catch(() => {
+      // Routines are optional; the overload engine falls back to inferred targets.
+    });
+  }
   
   // Load persisted equipment filters (exercise -> selected vendor/all)
   try {
@@ -237,183 +245,64 @@ function isAssistedExercise(ex: any): boolean {
   return assistedKeywords.some(keyword => title.includes(keyword));
 }
 
-// Analyze strength progress based on last N sessions (as set in settings)
-function analyzeStrengthProgress(ex: any) {
-  const days = Object.keys(ex.byDay || {}).sort();
-  
-  // Check if inactive (last session more than 60 days ago) FIRST
-  // This should be checked before insufficient data check
-  const lastDay = days[days.length - 1];
-  if (!lastDay) return null;
-  
-  const lastDate = new Date(lastDay);
-  const daysSinceLastWorkout = Math.floor((Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-  
-  if (daysSinceLastWorkout > 60) {
-    return {
-      type: "inactive",
-      message: t("exercises.insights.inactive", {
-        days: daysSinceLastWorkout
-      })
-    };
+// Progressive overload states that carry a useful status to show the user
+function hasOverload(o: any): boolean {
+  if (!o) return false;
+  return [
+    "progressing",
+    "ready_to_increase",
+    "holding",
+    "plateau_suspected",
+    "regressing",
+    "returning",
+  ].includes(o.status);
+}
+
+// Only surface the compact badge for states that call for attention
+function showOverloadBadge(o: any): boolean {
+  if (!o) return false;
+  return ["progressing", "ready_to_increase", "plateau_suspected", "regressing"].includes(o.status);
+}
+
+// Icon for each progression status
+function statusIcon(status: string): string {
+  switch (status) {
+    case "progressing": return "📈";
+    case "ready_to_increase": return "🎯";
+    case "plateau_suspected": return "⏸️";
+    case "regressing": return "📉";
+    case "returning": return "🔄";
+    case "holding": return "➡️";
+    default: return "ℹ️";
   }
-  
-  // Check for insufficient data - need at least the configured number of sessions
-  const minSessions = store.plateauDetectionSessions;
-  if (days.length < minSessions) {
-    return {
-      type: "insufficient",
-      message: t("exercises.insights.insufficient", {
-        sessions: days.length,
-        needed: minSessions
-      })
-    };
-  }
-  
-  // Get last N sessions (regardless of when they were done)
-  const lastNDays = days.slice(-minSessions);
-  
-  // Handle cardio vs strength exercises differently
-  const isCardio = ex.exerciseType === "cardio";
-  
-  if (isCardio) {
-    // Cardio analysis: distance and duration improvements
-    const sessions = lastNDays.map(d => ({
-      day: d,
-      totalDistance: ex.byDay[d]?.totalDistance || 0,
-      totalDuration: ex.byDay[d]?.totalDuration || 0,
-      maxDistance: ex.byDay[d]?.maxDistance || 0,
-    }));
-    
-    const distances = sessions.map(s => s.maxDistance).filter(d => d > 0);
-    const durations = sessions.map(s => s.totalDuration).filter(d => d > 0);
-    
-    // If no distance/duration data, return null
-    if (distances.length === 0 && durations.length === 0) return null;
-    
-    // Use distance if available, otherwise duration
-    const metric = distances.length > 0 ? distances : durations;
-    const metricRange = Math.max(...metric) - Math.min(...metric);
-    const avgMetric = metric.reduce((a, b) => a + b, 0) / metric.length;
-    
-    // Plateau: metric staying within 5% range
-    if (metricRange <= avgMetric * 0.05) {
-      return {
-        type: "plateau",
-        message: distances.length > 0 
-          ? t("exercises.insights.plateauCardio", { metric: `${avgMetric.toFixed(2)} km` })
-          : t("exercises.insights.plateauCardio", { metric: formatDurationSeconds(avgMetric) })
-      };
-    }
-    
-    // Compare first half vs second half
-    const midpoint = Math.floor(sessions.length / 2);
-    const firstHalf = metric.slice(0, midpoint);
-    const secondHalf = metric.slice(midpoint);
-    
-    const firstAvg = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
-    const secondAvg = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
-    const change = ((secondAvg - firstAvg) / firstAvg) * 100;
-    
-    if (change > 5) {
-      return {
-        type: "gaining",
-        message: t("exercises.insights.gainingCardio", { change: change.toFixed(1), sessions: minSessions })
-      };
-    }
-    
-    if (change < -5) {
-      return {
-        type: "losing",
-        message: t("exercises.insights.losingCardio", { change: Math.abs(change).toFixed(1), sessions: minSessions })
-      };
-    }
-    
-    return {
-      type: "maintaining",
-      message: t("exercises.insights.maintaining")
-    };
-    
-  } else {
-    // Strength analysis: weight and reps
-    const sessions = lastNDays.map(d => ({
-      day: d,
-      maxWeight: ex.byDay[d]?.maxWeight || 0,
-      repsAtMax: ex.byDay[d]?.repsAtMax || 0,
-    }));
-    
-    // Check for plateau: weight and reps staying within small ranges
-    const weights = sessions.map(s => s.maxWeight);
-    const reps = sessions.map(s => s.repsAtMax);
-    
-    const weightRange = Math.max(...weights) - Math.min(...weights);
-    const repsRange = Math.max(...reps) - Math.min(...reps);
-    const avgWeight = weights.reduce((a, b) => a + b, 0) / weights.length;
-    
-    // Plateau detection: weight within 0.5kg and reps within 1
-    if (weightRange <= 0.5 && repsRange <= 1) {
-      return {
-        type: "plateau",
-        message: t("exercises.insights.plateau", {
-          weight: `${formatWeight(avgWeight)} ${getWeightUnit()}`,
-          repsMin: Math.min(...reps),
-          repsMax: Math.max(...reps)
-        })
-      };
-    }
-    
-    // Check for strength gain/loss by comparing first half vs second half
-    const midpoint = Math.floor(sessions.length / 2);
-    const firstHalf = sessions.slice(0, midpoint);
-    const secondHalf = sessions.slice(midpoint);
-    
-    const firstAvgWeight = firstHalf.reduce((a, b) => a + b.maxWeight, 0) / firstHalf.length;
-    const secondAvgWeight = secondHalf.reduce((a, b) => a + b.maxWeight, 0) / secondHalf.length;
-    
-    const firstAvgReps = firstHalf.reduce((a, b) => a + b.repsAtMax, 0) / firstHalf.length;
-    const secondAvgReps = secondHalf.reduce((a, b) => a + b.repsAtMax, 0) / secondHalf.length;
-    
-    const weightChange = secondAvgWeight - firstAvgWeight;
-    const repsChange = secondAvgReps - firstAvgReps;
-    
-    // Check if this is an assisted exercise (inverted weight logic)
-    const isAssisted = isAssistedExercise(ex);
-    
-    // For assisted exercises, decreasing weight = gaining strength (less assistance needed)
-    // For regular exercises, increasing weight = gaining strength
-    const effectiveWeightChange = isAssisted ? -weightChange : weightChange;
-    
-    // Strength gain: weight increase >2kg or reps increase >2 with stable weight
-    // For assisted exercises, this means weight DECREASE >2kg
-    if (effectiveWeightChange > 2 || (repsChange > 2 && effectiveWeightChange >= -0.5)) {
-      return {
-        type: "gaining",
-        message: t("exercises.insights.gaining", {
-          weightChange: `${formatWeight(Math.abs(weightChange))} ${getWeightUnit()}`,
-          repsChange: Math.abs(repsChange).toFixed(0),
-          sessions: minSessions
-        })
-      };
-    }
-    
-    // Strength loss: weight decrease >2kg or reps decrease >2 with stable weight
-    // For assisted exercises, this means weight INCREASE >2kg
-    if (effectiveWeightChange < -2 || (repsChange < -2 && effectiveWeightChange <= 0.5)) {
-      return {
-        type: "losing",
-        message: t("exercises.insights.losing", {
-          weightChange: `${formatWeight(Math.abs(weightChange))} ${getWeightUnit()}`,
-          repsChange: Math.abs(repsChange).toFixed(0),
-          sessions: minSessions
-        })
-      };
-    }
-    
-    // Default: maintaining (no significant change detected)
-    return {
-      type: "maintaining",
-      message: t("exercises.insights.maintaining")
-    };
+}
+
+// Build a localized progressive-overload recommendation string
+function describeOverload(o: any): string {
+  if (!o) return "";
+  const unit = getWeightUnit();
+  const currentWeight = formatWeight(o.currentWeight);
+  const targetWeight = formatWeight(o.suggestedWeight);
+  switch (o.action) {
+    case "reduce_assistance":
+      return t("exercises.overload.reduceAssistance", { weight: targetWeight, unit, reps: o.suggestedReps });
+    case "increase_weight":
+      return t("exercises.overload.increaseWeight", { weight: targetWeight, unit, reps: o.suggestedReps });
+    case "add_reps":
+      return t("exercises.overload.addReps", { weight: currentWeight, unit, reps: o.suggestedReps });
+    case "increase_distance":
+      return t("exercises.overload.increaseDistance", { distance: Number(o.suggestedDistanceKm).toFixed(2), unit: getDistanceUnit() });
+    case "increase_duration":
+      return t("exercises.overload.increaseDuration", { duration: formatDurationSeconds(o.suggestedDurationSeconds) });
+    case "deload":
+      return t("exercises.overload.deload", { weight: targetWeight, unit });
+    case "resume":
+      return t("exercises.overload.resume");
+    case "build_base":
+      return t("exercises.overload.buildBase");
+    case "hold":
+    default:
+      return t("exercises.overload.hold");
   }
 }
 
@@ -446,12 +335,16 @@ const exercises = computed(() => {
         title,
         canonicalTitle,
         selectionKey,
+        templateId: (ex.exercise_template_id || null) as string | null,
         video_url: ex.url || null,
         exercise_type: ex.exercise_type || null,
         sets: [] as any[],
         prs: [] as any[],
         equipmentConfigs, // Store equipment configs for this exercise
       });
+      if (!entry.templateId && ex.exercise_template_id) {
+        entry.templateId = ex.exercise_template_id;
+      }
       
       // If equipment filtering is active for this exercise, check if the workout matches
       if (selectedEquipmentId && selectedEquipmentId !== "all") {
@@ -508,6 +401,10 @@ const exercises = computed(() => {
       totalDuration: number;
       maxDistance: number;
       maxDuration: number;
+      best1RM: number;
+      rpeSum: number;
+      rpeCount: number;
+      avgRpe: number | null;
     }> = {};
     
     for (const s of ex.sets) {
@@ -521,7 +418,11 @@ const exercises = computed(() => {
         totalDistance: 0,
         totalDuration: 0,
         maxDistance: 0,
-        maxDuration: 0
+        maxDuration: 0,
+        best1RM: 0,
+        rpeSum: 0,
+        rpeCount: 0,
+        avgRpe: null
       });
       
       // Strength metrics
@@ -529,6 +430,13 @@ const exercises = computed(() => {
       cur.volume += setVolume;
       cur.setCount += 1;
       cur.totalReps += (Number(s.reps) || 0);
+      cur.best1RM = Math.max(cur.best1RM, estimate1RM(Number(s.weight) || 0, Number(s.reps) || 0));
+
+      const setRpe = Number(s.rpe);
+      if (Number.isFinite(setRpe) && setRpe > 0) {
+        cur.rpeSum += setRpe;
+        cur.rpeCount += 1;
+      }
       
       if ((Number(s.weight) || 0) > cur.maxWeight) {
         cur.maxWeight = Number(s.weight) || 0;
@@ -547,11 +455,12 @@ const exercises = computed(() => {
       cur.maxDuration = Math.max(cur.maxDuration, duration);
     }
     
-    // Calculate avg volume per set for each day
+    // Calculate avg volume per set and avg RPE for each day
     for (const day of Object.keys(byDay)) {
       const dayData = byDay[day];
       if (dayData) {
         dayData.avgVolumePerSet = dayData.setCount > 0 ? dayData.volume / dayData.setCount : 0;
+        dayData.avgRpe = dayData.rpeCount > 0 ? dayData.rpeSum / dayData.rpeCount : null;
       }
     }
     ex.byDay = byDay;
@@ -613,8 +522,16 @@ const exercises = computed(() => {
     const days = Object.keys(byDay).sort();
     ex.lastTrainedDate = days.length > 0 ? days[days.length - 1] : null;
     
-    // Analyze last N sessions for plateaus and strength changes (based on setting)
-    ex.strengthInsight = analyzeStrengthProgress(ex);
+    // Progressive overload state + recommendation (exposure-based, multi-signal)
+    const routineTarget = store.getRoutineTarget(ex.templateId);
+    ex.overload = analyzeProgression(ex.byDay, {
+      sessions: store.plateauDetectionSessions,
+      sets: ex.sets,
+      isCardio: ex.exerciseType === "cardio",
+      isAssisted: isAssistedExercise(ex),
+      isBodyweight: ex.isBodyweight,
+      targetReps: routineTarget?.targetReps,
+    });
   }
   // Initialize collapsed state for new items
   for (const ex of list) {
@@ -633,9 +550,9 @@ const filteredExercises = computed(() => {
     filtered = filtered.filter((ex: any) => (ex.title || "").toLowerCase().includes(q));
   }
   
-  // Apply plateau filter
-  if (plateauFilter.value) {
-    filtered = filtered.filter((ex: any) => ex.strengthInsight?.type === plateauFilter.value);
+  // Apply progression-status filter
+  if (statusFilter.value) {
+    filtered = filtered.filter((ex: any) => ex.overload?.status === statusFilter.value);
   }
   
   return filtered;
@@ -661,11 +578,12 @@ const exerciseStats = computed(() => {
   cutoffDate.setDate(cutoffDate.getDate() - 60);
   
   let active = 0;
-  let gaining = 0;
-  let plateau = 0;
-  let losing = 0;
-  let maintaining = 0;
-  let inactive = 0;
+  let progressing = 0;
+  let readyToIncrease = 0;
+  let holding = 0;
+  let plateauSuspected = 0;
+  let regressing = 0;
+  let returning = 0;
   let insufficient = 0;
   
   for (const ex of exercises.value) {
@@ -677,19 +595,18 @@ const exerciseStats = computed(() => {
       }
     }
     
-    // Count by insight type
-    if (ex.strengthInsight) {
-      const type = ex.strengthInsight.type;
-      if (type === "gaining") gaining++;
-      else if (type === "plateau") plateau++;
-      else if (type === "losing") losing++;
-      else if (type === "maintaining") maintaining++;
-      else if (type === "inactive") inactive++;
-      else if (type === "insufficient") insufficient++;
-    }
+    // Count by progression status
+    const status = ex.overload?.status;
+    if (status === "progressing") progressing++;
+    else if (status === "ready_to_increase") readyToIncrease++;
+    else if (status === "holding") holding++;
+    else if (status === "plateau_suspected") plateauSuspected++;
+    else if (status === "regressing") regressing++;
+    else if (status === "returning") returning++;
+    else if (status === "insufficient") insufficient++;
   }
   
-  return { total, active, gaining, plateau, losing, maintaining, inactive, insufficient };
+  return { total, active, progressing, readyToIncrease, holding, plateauSuspected, regressing, returning, insufficient };
 });
 
 // Format date for display
@@ -1158,8 +1075,8 @@ const barChartOptions = {
       <div class="exercise-stats-summary">
         <div
           class="stat-pill stat-total"
-          :class="{ selected: plateauFilter === null }"
-          @click="plateauFilter = null"
+          :class="{ selected: statusFilter === null }"
+          @click="statusFilter = null"
         >
           <span class="stat-label">{{ $t("exercises.summary.total") }}:</span>
           <span class="stat-value">{{ exerciseStats.total }}</span>
@@ -1170,30 +1087,43 @@ const barChartOptions = {
         </div>
         <div
           class="stat-pill stat-gaining clickable"
-          v-if="exerciseStats.gaining > 0"
-          :class="{ selected: plateauFilter === 'gaining' }"
-          @click="plateauFilter = plateauFilter === 'gaining' ? null : 'gaining'"
+          v-if="exerciseStats.progressing > 0"
+          :class="{ selected: statusFilter === 'progressing' }"
+          @click="statusFilter = statusFilter === 'progressing' ? null : 'progressing'"
+          :title="$t('exercises.overload.status.progressing')"
         >
           <span class="stat-icon">📈</span>
-          <span class="stat-value">{{ exerciseStats.gaining }}</span>
+          <span class="stat-value">{{ exerciseStats.progressing }}</span>
+        </div>
+        <div
+          class="stat-pill stat-ready clickable"
+          v-if="exerciseStats.readyToIncrease > 0"
+          :class="{ selected: statusFilter === 'ready_to_increase' }"
+          @click="statusFilter = statusFilter === 'ready_to_increase' ? null : 'ready_to_increase'"
+          :title="$t('exercises.overload.status.ready_to_increase')"
+        >
+          <span class="stat-icon">🎯</span>
+          <span class="stat-value">{{ exerciseStats.readyToIncrease }}</span>
         </div>
         <div
           class="stat-pill stat-plateau clickable"
-          v-if="exerciseStats.plateau > 0"
-          :class="{ selected: plateauFilter === 'plateau' }"
-          @click="plateauFilter = plateauFilter === 'plateau' ? null : 'plateau'"
+          v-if="exerciseStats.plateauSuspected > 0"
+          :class="{ selected: statusFilter === 'plateau_suspected' }"
+          @click="statusFilter = statusFilter === 'plateau_suspected' ? null : 'plateau_suspected'"
+          :title="$t('exercises.overload.status.plateau_suspected')"
         >
           <span class="stat-icon">⏸️</span>
-          <span class="stat-value">{{ exerciseStats.plateau }}</span>
+          <span class="stat-value">{{ exerciseStats.plateauSuspected }}</span>
         </div>
         <div
           class="stat-pill stat-losing clickable"
-          v-if="exerciseStats.losing > 0"
-          :class="{ selected: plateauFilter === 'losing' }"
-          @click="plateauFilter = plateauFilter === 'losing' ? null : 'losing'"
+          v-if="exerciseStats.regressing > 0"
+          :class="{ selected: statusFilter === 'regressing' }"
+          @click="statusFilter = statusFilter === 'regressing' ? null : 'regressing'"
+          :title="$t('exercises.overload.status.regressing')"
         >
           <span class="stat-icon">📉</span>
-          <span class="stat-value">{{ exerciseStats.losing }}</span>
+          <span class="stat-value">{{ exerciseStats.regressing }}</span>
         </div>
       </div>
     </div>
@@ -1216,26 +1146,11 @@ const barChartOptions = {
               </span>
               <span class="last-trained-date">{{ formatLastTrained(ex.lastTrainedDate) }}</span>
             </div>
-            <!-- Strength Insight Badge -->
-            <div v-if="ex.strengthInsight" class="insight-badge-container">
-              <span 
-                class="insight-badge" 
-                :class="ex.strengthInsight.type"
-              >
-                <span v-if="ex.strengthInsight.type === 'plateau'" class="insight-icon">⏸️</span>
-                <span v-else-if="ex.strengthInsight.type === 'gaining'" class="insight-icon">📈</span>
-                <span v-else-if="ex.strengthInsight.type === 'losing'" class="insight-icon">📉</span>
-                <span v-else-if="ex.strengthInsight.type === 'insufficient'" class="insight-icon">ℹ️</span>
-                <span v-else-if="ex.strengthInsight.type === 'inactive'" class="insight-icon">🚫</span>
-                <span v-else-if="ex.strengthInsight.type === 'maintaining'" class="insight-icon">➡️</span>
-                <span class="insight-text">{{ 
-                  ex.strengthInsight.type === "plateau" ? $t("exercises.insights.plateauBadge") :
-                  ex.strengthInsight.type === "gaining" ? $t("exercises.insights.gainingBadge") :
-                  ex.strengthInsight.type === "losing" ? $t("exercises.insights.losingBadge") :
-                  ex.strengthInsight.type === "inactive" ? $t("exercises.insights.inactiveBadge") :
-                  ex.strengthInsight.type === "maintaining" ? $t("exercises.insights.maintainingBadge") :
-                  $t("exercises.insights.insufficientBadge")
-                }}</span>
+            <!-- Progressive Overload Badge -->
+            <div v-if="showOverloadBadge(ex.overload)" class="overload-badge-container">
+              <span class="overload-badge" :class="ex.overload.status">
+                <span class="insight-icon">{{ statusIcon(ex.overload.status) }}</span>
+                <span class="insight-text">{{ $t(`exercises.overload.status.${ex.overload.status}`) }}</span>
               </span>
             </div>
           </div>
@@ -1245,9 +1160,21 @@ const barChartOptions = {
         <!-- Card Content (Expanded) -->
         <Transition name="card-expand">
         <div v-if="expanded[ex.id]" class="card-content">
-          <!-- Plateau Insight Message -->
-          <div v-if="ex.strengthInsight" class="insight-message" :class="ex.strengthInsight.type">
-            {{ ex.strengthInsight.message }}
+          <!-- Progressive Overload State + Recommendation -->
+          <div v-if="hasOverload(ex.overload)" class="overload-card" :class="ex.overload.status">
+            <div class="overload-card-header">
+              <span class="overload-card-icon">{{ statusIcon(ex.overload.status) }}</span>
+              <span class="overload-card-title">{{ $t("exercises.overload.title") }}</span>
+              <span class="overload-status" :class="ex.overload.status">{{ $t(`exercises.overload.status.${ex.overload.status}`) }}</span>
+              <span class="overload-confidence" :class="ex.overload.confidence">
+                {{ $t(`exercises.overload.confidence.${ex.overload.confidence}`) }}
+              </span>
+            </div>
+            <div class="overload-recommendation">{{ describeOverload(ex.overload) }}</div>
+            <div class="overload-reason">{{ $t(`exercises.overload.reasons.${ex.overload.reason}`) }}</div>
+            <div v-if="ex.overload.signals?.targetSource === 'routine'" class="overload-target">
+              {{ $t("exercises.overload.routineTarget", { reps: ex.overload.signals.targetReps }) }}
+            </div>
           </div>
 
           <!-- Equipment Selector -->
@@ -2106,6 +2033,15 @@ const barChartOptions = {
   color: #fbbf24;
 }
 
+.stat-pill.stat-ready {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: #8b5cf6;
+}
+
+.stat-pill.stat-ready .stat-value {
+  color: #a78bfa;
+}
+
 .stat-pill.stat-losing {
   background: rgba(239, 68, 68, 0.1);
   border-color: #ef4444;
@@ -2128,23 +2064,34 @@ const barChartOptions = {
 .exercise-title-container { display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem; }
 .exercise-title { font-size: 1rem; font-weight: 600; text-align: left; }
 .last-trained-date { font-size: 0.75rem; color: var(--text-secondary); font-weight: 400; }
-.insight-badge-container { display: flex; align-items: center; }
-.insight-badge { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; transition: all 0.2s ease; }
-.insight-badge.plateau { background: rgba(234, 179, 8, 0.15); color: #fbbf24; border: 1.5px solid #eab308; }
-.insight-badge.gaining { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1.5px solid #10b981; }
-.insight-badge.losing { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1.5px solid #ef4444; }
-.insight-badge.insufficient { background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1.5px solid #64748b; }
-.insight-badge.inactive { background: rgba(107, 114, 128, 0.15); color: #9ca3af; border: 1.5px solid #6b7280; }
-.insight-badge.maintaining { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1.5px solid #3b82f6; }
 .insight-icon { font-size: 1rem; line-height: 1; }
 .insight-text { font-size: 0.8rem; font-weight: 600; }
-.insight-message { padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.9rem; line-height: 1.5; margin: 0.5rem 0; }
-.insight-message.plateau { background: rgba(234, 179, 8, 0.12); color: #fbbf24; border-left: 3px solid #eab308; }
-.insight-message.gaining { background: rgba(16, 185, 129, 0.12); color: #10b981; border-left: 3px solid #10b981; }
-.insight-message.losing { background: rgba(239, 68, 68, 0.12); color: #ef4444; border-left: 3px solid #ef4444; }
-.insight-message.insufficient { background: rgba(148, 163, 184, 0.12); color: #94a3b8; border-left: 3px solid #64748b; }
-.insight-message.inactive { background: rgba(107, 114, 128, 0.12); color: #9ca3af; border-left: 3px solid #6b7280; }
-.insight-message.maintaining { background: rgba(59, 130, 246, 0.12); color: #60a5fa; border-left: 3px solid #3b82f6; }
+.overload-badge-container { display: flex; align-items: center; }
+.overload-badge { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1.5px solid #8b5cf6; }
+.overload-card { padding: 0.75rem 1rem; border-radius: 8px; margin: 0.5rem 0; background: rgba(139, 92, 246, 0.12); border-left: 3px solid #8b5cf6; }
+.overload-card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; flex-wrap: wrap; }
+.overload-card-icon { font-size: 1rem; line-height: 1; }
+.overload-card-title { font-weight: 600; color: var(--text-primary); font-size: 0.9rem; }
+.overload-status { margin-left: auto; font-size: 0.75rem; font-weight: 600; padding: 0.1rem 0.5rem; border-radius: 999px; border: 1px solid currentColor; }
+.overload-confidence { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.1rem 0.4rem; border-radius: 999px; border: 1px solid currentColor; }
+.overload-confidence.low { color: #94a3b8; }
+.overload-confidence.medium { color: #60a5fa; }
+.overload-confidence.high { color: #10b981; }
+.overload-recommendation { font-size: 0.9rem; font-weight: 600; color: var(--text-primary); }
+.overload-reason { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.15rem; line-height: 1.4; }
+.overload-target { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.15rem; opacity: 0.85; }
+.overload-badge.progressing, .overload-status.progressing { background: rgba(16, 185, 129, 0.15); color: #10b981; border-color: #10b981; }
+.overload-card.progressing { background: rgba(16, 185, 129, 0.12); border-left-color: #10b981; }
+.overload-badge.ready_to_increase, .overload-status.ready_to_increase { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border-color: #8b5cf6; }
+.overload-card.ready_to_increase { background: rgba(139, 92, 246, 0.12); border-left-color: #8b5cf6; }
+.overload-badge.holding, .overload-status.holding { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-color: #3b82f6; }
+.overload-card.holding { background: rgba(59, 130, 246, 0.12); border-left-color: #3b82f6; }
+.overload-badge.plateau_suspected, .overload-status.plateau_suspected { background: rgba(234, 179, 8, 0.15); color: #fbbf24; border-color: #eab308; }
+.overload-card.plateau_suspected { background: rgba(234, 179, 8, 0.12); border-left-color: #eab308; }
+.overload-badge.regressing, .overload-status.regressing { background: rgba(239, 68, 68, 0.15); color: #ef4444; border-color: #ef4444; }
+.overload-card.regressing { background: rgba(239, 68, 68, 0.12); border-left-color: #ef4444; }
+.overload-badge.returning, .overload-status.returning { background: rgba(107, 114, 128, 0.15); color: #9ca3af; border-color: #6b7280; }
+.overload-card.returning { background: rgba(107, 114, 128, 0.12); border-left-color: #6b7280; }
 .card-content { margin-top: 0.75rem; }
 
 /* Card expand/collapse transition */
@@ -2346,6 +2293,7 @@ const barChartOptions = {
 
   /* Other pills: share the second row equally */
   .exercise-stats-summary .stat-pill.stat-gaining,
+  .exercise-stats-summary .stat-pill.stat-ready,
   .exercise-stats-summary .stat-pill.stat-plateau,
   .exercise-stats-summary .stat-pill.stat-losing {
     flex: 1 1 0;
