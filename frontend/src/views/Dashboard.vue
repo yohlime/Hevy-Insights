@@ -709,9 +709,9 @@ const plateauExercises = computed(() => {
     const daysSince = Math.floor((Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
     if (daysSince > 60) continue;
     
-    // Get last 5 sessions
-    const last5Days = days.slice(-5);
-    const sessions = last5Days.map(d => ({
+    // Get the last N sessions (matches the configurable plateau detection window)
+    const lastWindowDays = days.slice(-minSessions);
+    const sessions = lastWindowDays.map(d => ({
       day: d,
       maxWeight: ex.byDay[d]?.maxWeight || 0,
       repsAtMax: ex.byDay[d]?.repsAtMax || 0,
