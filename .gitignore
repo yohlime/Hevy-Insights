@@ -234,11 +234,16 @@ dist-ssr
 /backend/sample_data
 /backend/data
 
+# Devenv
+.devenv*
+devenv.local.nix
+
 # direnv
 .direnv
 
 # pre-commit
 .pre-commit-config.yaml
+
 .opencode/
 
 # Local HTTP client secrets
