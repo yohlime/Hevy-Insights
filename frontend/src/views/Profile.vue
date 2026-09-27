@@ -2,11 +2,13 @@
 import { ref, computed, onMounted, watch } from "vue"
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { useHevyCache } from "../stores/hevy_cache";
+import { useSession } from "../stores/session";
+import { usePreferences } from "../stores/preferences";
 import { formatDate } from "../utils/formatters";
 
 const { t } = useI18n();
-const store = useHevyCache();
+const store = useSession();
+const preferences = usePreferences();
 const router = useRouter();
 
 // State
@@ -59,7 +61,7 @@ const saveHeight = () => {
     userHeight.value = tempHeight.value;
     
     // Update Pinia store
-    store.setUserHeight(tempHeight.value);
+    preferences.setUserHeight(tempHeight.value);
     
     // Show success message
     showSuccessMessage.value = true;

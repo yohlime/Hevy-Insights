@@ -6,7 +6,7 @@
  * https://github.com/casudo/Hevy-Insights/issues/26
 **/
 
-import { useHevyCache } from "../stores/hevy_cache";
+import { usePreferences } from "../stores/preferences";
 
 export type ExerciseType = "strength" | "cardio" | "mixed" | "unknown";
 
@@ -127,10 +127,10 @@ export function formatDurationSeconds(seconds: number | null | undefined): strin
 export function formatDistance(km: number | null | undefined): string {
   if (!km || km <= 0) return "-";
   
-  const store = useHevyCache();
+  const preferences = usePreferences();
   
   // If user prefers lbs (imperial), show miles; otherwise show km
-  if (store.weightUnit === "lbs") {
+  if (preferences.weightUnit === "lbs") {
     const miles = km * 0.621371;
     return `${miles.toFixed(2)} mi`;
   }

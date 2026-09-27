@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useHevyCache } from "../stores/hevy_cache";
+import { useSession } from "../stores/session";
+import { usePreferences } from "../stores/preferences";
 import { authService } from "../services/api";
 
-const store = useHevyCache();
+const store = useSession();
+const preferences = usePreferences();
 const { locale, t } = useI18n();
 const userAccount = computed(() => store.userAccount);
 const dataSource = computed(() => store.dataSource);
@@ -98,16 +100,16 @@ const graphAxisFormats = computed(() => [
   { label: `Month YYYY (${t('global.months.decemberLong')} 2025)`, value: "long" },
 ]);
 
-const selectedDateFormat = ref<string>(store.dateFormat);
-const selectedGraphAxisFormat = ref<string>(store.graphAxisFormat);
+const selectedDateFormat = ref<string>(preferences.dateFormat);
+const selectedGraphAxisFormat = ref<string>(preferences.graphAxisFormat);
 
 // Watch for format changes
 watch(selectedDateFormat, (newFormat) => {
-  store.setDateFormat(newFormat as "iso" | "eu" | "us" | "uk");
+  preferences.setDateFormat(newFormat as "iso" | "eu" | "us" | "uk");
 });
 
 watch(selectedGraphAxisFormat, (newFormat) => {
-  store.setGraphAxisFormat(newFormat as "numeric" | "short" | "long");
+  preferences.setGraphAxisFormat(newFormat as "numeric" | "short" | "long");
 });
 
 // Weight unit settings
@@ -116,18 +118,18 @@ const weightUnits = computed(() => [
   { label: `${t('settings.weightUnit.lbs')} (lbs)`, value: "lbs" },
 ]);
 
-const selectedWeightUnit = ref<string>(store.weightUnit);
+const selectedWeightUnit = ref<string>(preferences.weightUnit);
 
 watch(selectedWeightUnit, (newUnit) => {
-  store.setWeightUnit(newUnit as "kg" | "lbs");
+  preferences.setWeightUnit(newUnit as "kg" | "lbs");
 });
 
 // Plateau detection settings
-const plateauSessions = ref<number>(store.plateauDetectionSessions);
+const plateauSessions = ref<number>(preferences.plateauDetectionSessions);
 
 watch(plateauSessions, (newValue) => {
   if (newValue >= 3 && newValue <= 100) {
-    store.setPlateauDetectionSessions(newValue);
+    preferences.setPlateauDetectionSessions(newValue);
   }
 });
 
@@ -150,10 +152,10 @@ const resetSettings = () => {
   locale.value = "en";
   localStorage.setItem("language", "en");
   localStorage.setItem("update-check-enabled", "true");
-  store.setDateFormat("iso");
-  store.setGraphAxisFormat("short");
-  store.setWeightUnit("kg");
-  store.setPlateauDetectionSessions(5);
+  preferences.setDateFormat("iso");
+  preferences.setGraphAxisFormat("short");
+  preferences.setWeightUnit("kg");
+  preferences.setPlateauDetectionSessions(5);
 };
 </script>
 

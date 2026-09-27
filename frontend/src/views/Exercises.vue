@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, watch } from "vue";
-import { useHevyCache } from "../stores/hevy_cache";
+import { useSession } from "../stores/session";
+import { usePreferences } from "../stores/preferences";
+import { useEquipment } from "../stores/equipment";
 import { formatWeight, getWeightUnit, getDistanceUnit, formatPRValue, formatDate } from "../utils/formatters";
 import { detectExerciseType, formatDurationSeconds, formatDistance, isBodyweightExercise } from "../utils/exerciseTypeDetector";
 import { analyzeProgression, estimate1RM } from "../utils/progressiveOverload";
@@ -33,9 +35,11 @@ ChartJS.register(
   Legend
 );
 
-const store = useHevyCache();
+const store = useSession();
+const preferences = usePreferences();
+const equipment = useEquipment();
 const userAccount = computed(() => store.userAccount);
-const loading = computed(() => store.isLoadingWorkouts || store.isLoadingUser);
+const loading = computed(() => allWorkoutsQuery.isLoading.value || store.isLoadingUser);
 const { t } = useI18n();
 const SELECTED_EQUIPMENT_STORAGE_KEY = "selected_equipment_filters";
 
@@ -325,7 +329,7 @@ const exercises = computed(() => {
         .replace(/^-+|-+$/g, "");
       
       // Get equipment configs for this exercise
-      const equipmentConfigs = store.getEquipmentConfigsForExercise(canonicalTitle);
+      const equipmentConfigs = equipment.getEquipmentConfigsForExercise(canonicalTitle);
       const selectedEquipmentId = selectedEquipment.value[selectionKey] || selectedEquipment.value[id];
       const entry = (map[id] ||= {
         id,
@@ -522,7 +526,7 @@ const exercises = computed(() => {
     // Progressive overload state + recommendation (exposure-based, multi-signal)
     const routineTarget = routineTargetsQuery.data.value?.[ex.templateId] ?? null;
     ex.overload = analyzeProgression(ex.byDay, {
-      sessions: store.plateauDetectionSessions,
+      sessions: preferences.plateauDetectionSessions,
       sets: ex.sets,
       isCardio: ex.exerciseType === "cardio",
       isAssisted: isAssistedExercise(ex),
@@ -644,7 +648,7 @@ function getWeightVsRepsChartData(ex: any, graphRange: GraphRange = 0) {
     const dateLabel = formatDate(date);
     return {
       x: ex.byDay[d]?.repsAtMax || 0,
-      y: store.weightUnit === "lbs" ? (ex.byDay[d]?.maxWeight || 0) * 2.20462 : (ex.byDay[d]?.maxWeight || 0),
+      y: preferences.weightUnit === "lbs" ? (ex.byDay[d]?.maxWeight || 0) * 2.20462 : (ex.byDay[d]?.maxWeight || 0),
       label: dateLabel,
     };
   });
@@ -668,7 +672,7 @@ function getMaxWeightOverTimeChartData(ex: any, graphRange: GraphRange = 0) {
   const labels = days.map((d) => formatDate(new Date(d)));
   const weightData = days.map((d) => {
     const kg = ex.byDay[d]?.maxWeight || 0;
-    return store.weightUnit === "lbs" ? kg * 2.20462 : kg;
+    return preferences.weightUnit === "lbs" ? kg * 2.20462 : kg;
   });
   
   return {
@@ -692,7 +696,7 @@ function getAvgVolumePerSetChartData(ex: any, graphRange: GraphRange = 0) {
   const labels = days.map((d) => formatDate(new Date(d)));
   const avgVolData = days.map((d) => {
     const kg = ex.byDay[d]?.avgVolumePerSet || 0;
-    return Math.round(store.weightUnit === "lbs" ? kg * 2.20462 : kg);
+    return Math.round(preferences.weightUnit === "lbs" ? kg * 2.20462 : kg);
   });
   
   return {
@@ -716,7 +720,7 @@ function getVolumeChartData(ex: any, graphRange: GraphRange = 0) {
   const labels = days.map((d) => formatDate(new Date(d)));
   const volData = days.map((d) => {
     const kg = ex.byDay[d]?.volume || 0;
-    return store.weightUnit === "lbs" ? kg * 2.20462 : kg;
+    return preferences.weightUnit === "lbs" ? kg * 2.20462 : kg;
   });
   
   return {
@@ -802,7 +806,7 @@ function getRepVolumeChartData(ex: any, graphRange: GraphRange = 0) {
     const repVolume = totalReps * bodyWeight;
     
     // Convert to lbs if needed
-    return store.weightUnit === "lbs" ? repVolume * 2.20462 : repVolume;
+    return preferences.weightUnit === "lbs" ? repVolume * 2.20462 : repVolume;
   });
   
   return {
@@ -872,7 +876,7 @@ function saveEquipment() {
   
   if (editingEquipmentId.value) {
     // Update existing
-    store.updateEquipmentConfig(editingEquipmentId.value, {
+    equipment.updateEquipmentConfig(editingEquipmentId.value, {
       exerciseTitle,
       equipmentName,
       searchKeyword,
@@ -881,7 +885,7 @@ function saveEquipment() {
     editingEquipmentId.value = null;
   } else {
     // Add new
-    store.addEquipmentConfig({
+    equipment.addEquipmentConfig({
       exerciseTitle,
       equipmentName,
       searchKeyword,
@@ -920,7 +924,7 @@ function cancelEditEquipment() {
 
 function deleteEquipment(id: string) {
   if (confirm(t("exercises.equipment.confirmDelete"))) {
-    store.deleteEquipmentConfig(id);
+    equipment.deleteEquipmentConfig(id);
   }
 }
 
@@ -1680,10 +1684,10 @@ const barChartOptions = {
           <!-- List configured equipment list -->
           <div class="equipment-list">
             <h3>{{ $t("exercises.equipment.configured") }}</h3>
-            <div v-if="store.equipmentConfigs.length === 0" class="no-equipment">
+            <div v-if="equipment.equipmentConfigs.length === 0" class="no-equipment">
               {{ $t("exercises.equipment.noEquipment") }}
             </div>
-            <div v-for="config in store.equipmentConfigs" :key="config.id" class="equipment-item">
+            <div v-for="config in equipment.equipmentConfigs" :key="config.id" class="equipment-item">
               <div class="equipment-details">
                 <div class="equipment-title">{{ config.exerciseTitle }} - <strong>{{ config.equipmentName }}</strong></div>
                 <div class="equipment-keyword">{{ $t("exercises.equipment.keyword") }}: <code>{{ config.searchKeyword }}</code></div>

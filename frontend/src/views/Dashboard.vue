@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { useHevyCache } from "../stores/hevy_cache";
+import { useSession } from "../stores/session";
+import { usePreferences } from "../stores/preferences";
 import { useAllWorkoutsQuery } from "../composables/useAllWorkouts";
 import { calculateCSVStats, calculatePRsGrouped, calculateMuscleDistribution } from "../utils/csvCalculator";
 import { calculateWorkoutStreakWeeks } from "../utils/streaks";
@@ -37,7 +38,8 @@ ChartJS.register(
 );
 
 const { t } = useI18n();
-const store = useHevyCache();
+const store = useSession();
+const preferences = usePreferences();
 const router = useRouter();
 const chartData = ref<any>(null);
 
@@ -299,7 +301,7 @@ const volumeProgression_Data = computed(() => {
     labels: agg.map(w => formatPeriodLabel(w.period, volumeProgression_Display.value)),
     data: agg.map(w => {
       const kg = w.volumeKg ?? 0;
-      return Math.round(store.weightUnit === "lbs" ? kg * 2.20462 : kg);
+      return Math.round(preferences.weightUnit === "lbs" ? kg * 2.20462 : kg);
     })
   };
 });
@@ -653,7 +655,7 @@ const avgWorkoutMinutes = computed(() => {
 // Get exercises with plateaus - show most recent 5
 const plateauExercises = computed(() => {
   const locale = localStorage.getItem("language") || "en";
-  const minSessions = store.plateauDetectionSessions;
+  const minSessions = preferences.plateauDetectionSessions;
   
   // Build exercise map similar to Exercises.vue
   const exerciseMap: Record<string, any> = {};
@@ -841,7 +843,7 @@ const processChartData = () => {
     const date = new Date(workout.start_time * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
     dates.push(date);
     const kg = workout.estimated_volume_kg || 0;
-    volumes.push(store.weightUnit === "lbs" ? kg * 2.20462 : kg);
+    volumes.push(preferences.weightUnit === "lbs" ? kg * 2.20462 : kg);
   });
 
   chartData.value = {

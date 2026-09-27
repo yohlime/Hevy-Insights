@@ -2,7 +2,8 @@
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { useHevyCache } from "../stores/hevy_cache";
+import { useSession } from "../stores/session";
+import { usePreferences } from "../stores/preferences";
 import { useAllWorkoutsQuery } from "../composables/useAllWorkouts";
 import { calculateCSVStats } from "../utils/csvCalculator";
 import { calculateWorkoutStreakWeeks } from "../utils/streaks";
@@ -10,7 +11,8 @@ import { getWeightUnit } from "../utils/formatters";
 import html2canvas from "html2canvas";
 
 const { t } = useI18n();
-const store = useHevyCache();
+const store = useSession();
+const preferences = usePreferences();
 const router = useRouter();
 
 const allWorkoutsQuery = useAllWorkoutsQuery();
@@ -45,7 +47,7 @@ const totalVolume = computed(() => {
 // Total Volume converted to user's preferred unit for display
 const totalVolumeDisplay = computed(() => {
   const volumeKg = totalVolume.value;
-  if (store.weightUnit === "lbs") {
+  if (preferences.weightUnit === "lbs") {
     return Math.round(volumeKg * 2.20462);
   }
   return Math.round(volumeKg);

@@ -2,11 +2,11 @@
 import { ref, computed, onMounted, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { authService, versionService } from "./services/api";
-import { useHevyCache } from "./stores/hevy_cache";
+import { useSession } from "./stores/session";
 
 const router = useRouter();
 const route = useRoute();
-const store = useHevyCache();
+const store = useSession();
 const userAccount = computed(() => store.userAccount);
 const showNav = ref(false);
 const appVersion = "v1.8.6"; // Update version as needed

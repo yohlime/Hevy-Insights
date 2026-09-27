@@ -3,12 +3,12 @@ import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { authService } from "../services/api";
-import { useHevyCache } from "../stores/hevy_cache";
+import { useSession } from "../stores/session";
 import { readCSVFile, parseCSV, validateCSVFile } from "../utils/csvParser";
 
 const router = useRouter();
 const { t } = useI18n();
-const store = useHevyCache();
+const store = useSession();
 
 // Mode selection
 type LoginMode = "credentials" | "apikey" | "csv";

@@ -16,7 +16,8 @@ import {
 } from "chart.js";
 import { useAddBodyMeasurementMutation, useBodyMeasurementsQuery } from "../composables/useBodyMeasurements";
 import { formatWeightPrecise, getWeightUnit, formatDate } from "../utils/formatters";
-import { useHevyCache } from "../stores/hevy_cache";
+import { useSession } from "../stores/session";
+import { usePreferences } from "../stores/preferences";
 
 // Register Chart.js components
 ChartJS.register(
@@ -31,7 +32,8 @@ ChartJS.register(
 );
 
 const { t } = useI18n();
-const store = useHevyCache();
+const store = useSession();
+const preferences = usePreferences();
 const router = useRouter();
 
 // Get theme colors from CSS variables
@@ -379,7 +381,7 @@ const saveMeasurement = async () => {
   try {
     // Save height to localStorage
     localStorage.setItem("user_height", userHeight.value.toString());
-    store.setUserHeight(userHeight.value);
+    preferences.setUserHeight(userHeight.value);
     
     // Save body fat percentage if provided
     if (newMeasurement.value.bodyFat && newMeasurement.value.bodyFat > 0 && newMeasurement.value.date) {

@@ -1,7 +1,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/vue-query";
-import { useHevyCache } from "../stores/hevy_cache";
+import { useSession } from "../stores/session";
 import { workoutService } from "../services/api";
 import { workoutQueryKeys, type WorkoutFilters } from "./workoutQueryKeys";
 
@@ -32,22 +32,22 @@ interface UseWorkoutsViewOptions {
   initialDay?: string;
 }
 
-type HevyCacheStore = ReturnType<typeof useHevyCache>;
+type SessionStore = ReturnType<typeof useSession>;
 
-async function fetchWorkoutPage(store: HevyCacheStore, page: number, pageSize: number, filters: WorkoutFilters): Promise<WorkoutPage> {
-  if (store.dataSource === "csv") {
-    if (!store.workouts.length) await store.fetchWorkouts();
-    const filtered = [...store.workouts]
+async function fetchWorkoutPage(session: SessionStore, page: number, pageSize: number, filters: WorkoutFilters): Promise<WorkoutPage> {
+  if (session.dataSource === "csv") {
+    const csvWorkouts = session.ensureCsvLoaded();
+    const filtered = [...csvWorkouts]
       .sort((a, b) => (b.start_time || 0) - (a.start_time || 0))
       .filter((w) => (filters.startEpoch == null || (w.start_time || 0) >= filters.startEpoch) && (filters.endEpoch == null || (w.start_time || 0) < filters.endEpoch))
       .filter((w) => !filters.name || String(w.title || w.name || "").toLowerCase().includes(filters.name.toLowerCase()));
     return { workouts: filtered.slice((page - 1) * pageSize, page * pageSize), total: filtered.length };
   }
 
-  if (!store.username) {
-    await store.fetchUserAccount();
+  if (!session.username) {
+    await session.fetchUserAccount();
   }
-  const result = await workoutService.getWorkouts(store.username ?? "", (page - 1) * pageSize, pageSize, {
+  const result = await workoutService.getWorkouts(session.username ?? "", (page - 1) * pageSize, pageSize, {
     name: filters.name,
     startEpoch: filters.startEpoch,
     endEpoch: filters.endEpoch,
@@ -64,8 +64,8 @@ async function fetchWorkoutPage(store: HevyCacheStore, page: number, pageSize: n
 export function useWorkoutsView(pageSize = 9, options: UseWorkoutsViewOptions = {}) {
   const infinite = options.infinite === true;
   const { t } = useI18n();
-  const store = useHevyCache();
-  const userAccount = computed(() => store.userAccount);
+  const session = useSession();
+  const userAccount = computed(() => session.userAccount);
 
   const timeRange = ref<TimeRange>("all");
   const searchName = ref("");
@@ -166,7 +166,7 @@ export function useWorkoutsView(pageSize = 9, options: UseWorkoutsViewOptions = 
   };
 
   const common = {
-    store,
+    store: session,
     userAccount,
     t,
     timeRange,
@@ -187,7 +187,7 @@ export function useWorkoutsView(pageSize = 9, options: UseWorkoutsViewOptions = 
   if (infinite) {
     const query = useInfiniteQuery({
       queryKey: computed(() => workoutQueryKeys.infinite(filters.value, pageSize)),
-      queryFn: ({ pageParam }) => fetchWorkoutPage(store, pageParam as number, pageSize, filters.value),
+      queryFn: ({ pageParam }) => fetchWorkoutPage(session, pageParam as number, pageSize, filters.value),
       initialPageParam: 1,
       getNextPageParam: (lastPage, allPages, lastPageParam) => {
         const loaded = allPages.reduce((sum, page) => sum + page.workouts.length, 0);
@@ -247,7 +247,7 @@ export function useWorkoutsView(pageSize = 9, options: UseWorkoutsViewOptions = 
 
   const query = useQuery({
     queryKey: computed(() => workoutQueryKeys.page(filters.value, currentPage.value, pageSize)),
-    queryFn: () => fetchWorkoutPage(store, currentPage.value, pageSize, filters.value),
+    queryFn: () => fetchWorkoutPage(session, currentPage.value, pageSize, filters.value),
     placeholderData: keepPreviousData,
   });
 

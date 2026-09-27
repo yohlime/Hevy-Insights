@@ -1,4 +1,4 @@
-import { useHevyCache } from "../stores/hevy_cache";
+import { usePreferences } from "../stores/preferences";
 import { useI18n } from "vue-i18n";
 
 /**
@@ -11,8 +11,8 @@ export function formatWeight(weightKg: number): string {
   const weight = Number(weightKg);
   if (!isFinite(weight)) return "0.0";
   
-  const store = useHevyCache();
-  if (store.weightUnit === "lbs") {
+  const preferences = usePreferences();
+  if (preferences.weightUnit === "lbs") {
     const lbs = weight * 2.20462;
     return lbs.toFixed(1);
   }
@@ -29,8 +29,8 @@ export function formatWeightPrecise(weightKg: number): string {
   const weight = Number(weightKg);
   if (!isFinite(weight)) return "0.00";
   
-  const store = useHevyCache();
-  if (store.weightUnit === "lbs") {
+  const preferences = usePreferences();
+  if (preferences.weightUnit === "lbs") {
     const lbs = weight * 2.20462;
     return lbs.toFixed(2);
   }
@@ -42,8 +42,8 @@ export function formatWeightPrecise(weightKg: number): string {
  * @returns "kg" or "lbs" based on user preference
 **/
 export function getWeightUnit(): string {
-  const store = useHevyCache();
-  return store.weightUnit;
+  const preferences = usePreferences();
+  return preferences.weightUnit;
 }
 
 /**
@@ -51,8 +51,8 @@ export function getWeightUnit(): string {
  * @returns "km" or "mi" based on user preference (lbs → mi, kg → km)
 **/
 export function getDistanceUnit(): string {
-  const store = useHevyCache();
-  return store.weightUnit === "lbs" ? "mi" : "km";
+  const preferences = usePreferences();
+  return preferences.weightUnit === "lbs" ? "mi" : "km";
 }
 
 /**
@@ -112,7 +112,7 @@ export function formatPRValue(type: string, value: number | string): string {
  * @returns Formatted date string based on user preference
 **/
 export function formatDate(dateInput: string | Date | number): string {
-  const store = useHevyCache();
+  const preferences = usePreferences();
   const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
   
   if (isNaN(date.getTime())) return String(dateInput);
@@ -121,7 +121,7 @@ export function formatDate(dateInput: string | Date | number): string {
   const month = (date.getMonth() + 1).toString().padStart(2, "0");
   const year = date.getFullYear();
   
-  switch (store.dateFormat) {
+  switch (preferences.dateFormat) {
     case "eu": // DD.MM.YYYY
       return `${day}.${month}.${year}`;
     case "us": // MM/DD/YYYY
@@ -142,7 +142,7 @@ export function formatDate(dateInput: string | Date | number): string {
  * @returns Formatted datetime string (e.g., "21.12.2025, 14:30" or "12/21/2025, 2:30 PM")
 **/
 export function formatDateTime(dateInput: string | Date | number): string {
-  const store = useHevyCache();
+  const preferences = usePreferences();
   const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
   
   if (isNaN(date.getTime())) return String(dateInput);
@@ -151,7 +151,7 @@ export function formatDateTime(dateInput: string | Date | number): string {
   const minutes = date.getMinutes().toString().padStart(2, "0");
   
   // Use 12-hour format for US/UK, 24-hour for ISO/EU
-  const use12Hour = store.dateFormat === "us" || store.dateFormat === "uk";
+  const use12Hour = preferences.dateFormat === "us" || preferences.dateFormat === "uk";
   
   let timeString: string;
   if (use12Hour) {
@@ -174,7 +174,7 @@ export function formatDateTime(dateInput: string | Date | number): string {
  * @returns Formatted month-year string
 **/
 export function formatMonthYear(dateInput: string | Date | number, style?: "short" | "long" | "numeric"): string {
-  const store = useHevyCache();
+  const preferences = usePreferences();
   const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
   
   if (isNaN(date.getTime())) return String(dateInput);
@@ -184,7 +184,7 @@ export function formatMonthYear(dateInput: string | Date | number, style?: "shor
   const monthNum = (month + 1).toString().padStart(2, "0");
   
   // Use provided style or fall back to user's preference
-  const formatStyle = style || store.graphAxisFormat;
+  const formatStyle = style || preferences.graphAxisFormat;
   
   if (formatStyle === "numeric") {
     return `${year}-${monthNum}`;
