@@ -9,10 +9,10 @@ from app.core.security import get_hevy_client
 from app.schemas.hevy import HevyWorkoutsResponse
 from app.services.demo_data import load_sample_data
 from app.services.workout_cache import (
+    WorkoutSource,
     api_key_account_key,
     get_cached_workout_count,
     get_cached_workouts,
-    is_workout_sync_complete,
     mark_workout_sync,
     oauth_account_key,
     should_sync_workouts,
@@ -72,7 +72,12 @@ def get_workouts(
                 requested_offset=page_offset,
                 requested_limit=page_size,
             ):
-                _sync_api_key_workouts(client=client, account_key=account_key)
+                _sync_api_key_workouts(
+                    client=client,
+                    account_key=account_key,
+                    requested_offset=page_offset,
+                    required_count=page_offset + page_size,
+                )
 
             total_count = get_cached_workout_count(
                 source="api_key",
@@ -94,7 +99,6 @@ def get_workouts(
                 "workouts": cached_workouts,
                 "page": page,
                 "page_size": page_size,
-                "workout_count": total_count,
                 "total_count": total_count,
             }
         else:
@@ -113,7 +117,13 @@ def get_workouts(
                 requested_offset=offset,
                 requested_limit=limit,
             ):
-                _sync_oauth_workouts(client=client, username=username, account_key=account_key)
+                _sync_oauth_workouts(
+                    client=client,
+                    username=username,
+                    account_key=account_key,
+                    requested_offset=offset,
+                    required_count=offset + limit,
+                )
 
             total_count = get_cached_workout_count(
                 source="oauth",
@@ -143,47 +153,75 @@ def get_workouts(
         raise HTTPException(status_code=status_code, detail=str(e))
 
 
-def _sync_oauth_workouts(*, client: Any, username: str, account_key: str) -> None:
+def _sync_oauth_workouts(
+    *,
+    client: Any,
+    username: str,
+    account_key: str,
+    requested_offset: int,
+    required_count: int,
+) -> None:
     source = "oauth"
-    stop_on_existing = is_workout_sync_complete(source=source, account_key=account_key)
+    page_size = OAUTH_UPSTREAM_WORKOUT_PAGE_SIZE
     workout_count = _workout_count_or_none(client=client, username=username)
-    page_limit = _sync_page_limit(workout_count=workout_count, page_size=OAUTH_UPSTREAM_WORKOUT_PAGE_SIZE)
+    page_limit = _sync_page_limit(workout_count=workout_count, page_size=page_size)
+    start_index = _sync_start_index(source=source, account_key=account_key, requested_offset=requested_offset, page_size=page_size)
+    fetched = get_cached_workout_count(source=source, account_key=account_key)
 
-    for page_index in range(page_limit):
-        offset = page_index * OAUTH_UPSTREAM_WORKOUT_PAGE_SIZE
+    for page_index in range(start_index, page_limit):
+        offset = page_index * page_size
         response = client.get_workouts(username=username, offset=offset)
         workouts = _workouts_from_response(response)
-        found_existing = store_workouts(source=source, account_key=account_key, workouts=workouts)
-
         if not workouts:
             mark_workout_sync(source=source, account_key=account_key, fully_synced=True)
             return
-        if stop_on_existing and found_existing:
-            mark_workout_sync(source=source, account_key=account_key, fully_synced=True)
+        store_workouts(source=source, account_key=account_key, workouts=workouts)
+        fetched += len(workouts)
+        if fetched >= required_count:
+            mark_workout_sync(source=source, account_key=account_key, fully_synced=False)
             return
 
-    mark_workout_sync(source=source, account_key=account_key, fully_synced=workout_count is not None)
+    mark_workout_sync(source=source, account_key=account_key, fully_synced=True)
 
 
-def _sync_api_key_workouts(*, client: Any, account_key: str) -> None:
+def _sync_api_key_workouts(
+    *,
+    client: Any,
+    account_key: str,
+    requested_offset: int,
+    required_count: int,
+) -> None:
     source = "api_key"
-    stop_on_existing = is_workout_sync_complete(source=source, account_key=account_key)
+    page_size = API_KEY_UPSTREAM_WORKOUT_PAGE_SIZE
     workout_count = _workout_count_or_none(client=client)
-    page_limit = _sync_page_limit(workout_count=workout_count, page_size=API_KEY_UPSTREAM_WORKOUT_PAGE_SIZE)
+    page_limit = _sync_page_limit(workout_count=workout_count, page_size=page_size)
+    start_index = _sync_start_index(source=source, account_key=account_key, requested_offset=requested_offset, page_size=page_size)
+    fetched = get_cached_workout_count(source=source, account_key=account_key)
 
-    for page in range(1, page_limit + 1):
-        response = client.get_workouts(page=page, page_size=API_KEY_UPSTREAM_WORKOUT_PAGE_SIZE)
+    for page_index in range(start_index, page_limit):
+        response = client.get_workouts(page=page_index + 1, page_size=page_size)
         workouts = _workouts_from_response(response)
-        found_existing = store_workouts(source=source, account_key=account_key, workouts=workouts)
-
         if not workouts:
             mark_workout_sync(source=source, account_key=account_key, fully_synced=True)
             return
-        if stop_on_existing and found_existing:
-            mark_workout_sync(source=source, account_key=account_key, fully_synced=True)
+        store_workouts(source=source, account_key=account_key, workouts=workouts)
+        fetched += len(workouts)
+        if fetched >= required_count:
+            mark_workout_sync(source=source, account_key=account_key, fully_synced=False)
             return
 
-    mark_workout_sync(source=source, account_key=account_key, fully_synced=workout_count is not None)
+    mark_workout_sync(source=source, account_key=account_key, fully_synced=True)
+
+
+def _sync_start_index(*, source: WorkoutSource, account_key: str, requested_offset: int, page_size: int) -> int:
+    # Always refetch the newest page to pick up new workouts; for deeper
+    # requests resume roughly where the cache ends (with one page of overlap).
+    if requested_offset == 0:
+        return 0
+    cached = get_cached_workout_count(source=source, account_key=account_key)
+    if cached <= 0:
+        return 0
+    return max(0, cached // page_size - 1)
 
 
 def _workout_count_or_none(*, client: Any, username: str | None = None) -> int | None:

@@ -23,27 +23,11 @@ def api_key_account_key(api_key: str) -> str:
 
 
 def should_sync_workouts(*, source: WorkoutSource, account_key: str, requested_offset: int, requested_limit: int) -> bool:
+    # Always refresh the newest page (to pick up new workouts); otherwise only
+    # sync when the requested window isn't cached yet.
     if requested_offset == 0:
         return True
-
-    fully_synced = is_workout_sync_complete(source=source, account_key=account_key)
-    cached_count = get_cached_workout_count(source=source, account_key=account_key)
-    if cached_count < requested_offset + requested_limit:
-        return not fully_synced
-
-    return not fully_synced
-
-
-def is_workout_sync_complete(*, source: WorkoutSource, account_key: str) -> bool:
-    with engine.begin() as connection:
-        row = connection.execute(
-            select(workout_syncs_table.c.fully_synced).where(
-                workout_syncs_table.c.source == source,
-                workout_syncs_table.c.account_key == account_key,
-            )
-        ).one_or_none()
-
-    return bool(row[0]) if row else False
+    return get_cached_workout_count(source=source, account_key=account_key) < requested_offset + requested_limit
 
 
 def get_cached_workout_count(

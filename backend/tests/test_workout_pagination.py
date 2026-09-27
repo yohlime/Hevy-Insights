@@ -64,7 +64,12 @@ class WorkoutPaginationTests(TestCase):
         self.assertEqual(len(response.json()["workouts"]), 50)
         self.assertEqual(response.json()["total_count"], 120)
         get_hevy_client.assert_called_once_with(api_key_cookie="api-key")
-        sync_api_key_workouts.assert_called_once_with(client=sync_api_key_workouts.call_args.kwargs["client"], account_key="account-key")
+        sync_api_key_workouts.assert_called_once_with(
+            client=sync_api_key_workouts.call_args.kwargs["client"],
+            account_key="account-key",
+            requested_offset=50,
+            required_count=100,
+        )
         get_cached_workouts.assert_called_once_with(
             source="api_key", account_key="account-key", offset=50, limit=50, start_epoch=None, end_epoch=None, name=None
         )
@@ -107,13 +112,66 @@ class WorkoutPaginationTests(TestCase):
 
         client = FakeAPIKeyClient()
         with (
-            patch.object(workout_routes, "is_workout_sync_complete", return_value=False),
+            patch.object(workout_routes, "get_cached_workout_count", return_value=0),
             patch.object(workout_routes, "store_workouts", return_value=False),
-            patch.object(workout_routes, "mark_workout_sync"),
+            patch.object(workout_routes, "mark_workout_sync") as mark_workout_sync,
         ):
-            workout_routes._sync_api_key_workouts(client=client, account_key="account-key")
+            workout_routes._sync_api_key_workouts(
+                client=client, account_key="account-key", requested_offset=0, required_count=20
+            )
 
         self.assertEqual(client.workout_calls, [(1, 10), (2, 10)])
+        mark_workout_sync.assert_called_once_with(source="api_key", account_key="account-key", fully_synced=True)
+
+    def test_api_key_sync_stops_once_requested_window_is_cached(self) -> None:
+        class FakeAPIKeyClient:
+            def __init__(self) -> None:
+                self.workout_calls: list[tuple[int, int]] = []
+
+            def get_workout_count(self) -> int:
+                return 100
+
+            def get_workouts(self, page: int, page_size: int) -> dict[str, object]:
+                self.workout_calls.append((page, page_size))
+                return {"workouts": [{"id": f"workout-{page}-{i}", "exercises": []} for i in range(page_size)]}
+
+        client = FakeAPIKeyClient()
+        with (
+            patch.object(workout_routes, "get_cached_workout_count", return_value=0),
+            patch.object(workout_routes, "store_workouts", return_value=False),
+            patch.object(workout_routes, "mark_workout_sync") as mark_workout_sync,
+        ):
+            workout_routes._sync_api_key_workouts(
+                client=client, account_key="account-key", requested_offset=0, required_count=20
+            )
+
+        # Full 10-workout pages: stops after the requested window is covered.
+        self.assertEqual(client.workout_calls, [(1, 10), (2, 10)])
+        mark_workout_sync.assert_called_once_with(source="api_key", account_key="account-key", fully_synced=False)
+
+    def test_sync_start_index_resumes_from_cache(self) -> None:
+        with patch.object(workout_routes, "get_cached_workout_count", return_value=50):
+            self.assertEqual(
+                workout_routes._sync_start_index(source="oauth", account_key="k", requested_offset=60, page_size=5), 9
+            )
+            self.assertEqual(
+                workout_routes._sync_start_index(source="oauth", account_key="k", requested_offset=0, page_size=5), 0
+            )
+
+    def test_should_sync_only_when_window_not_cached(self) -> None:
+        with patch.object(workout_cache, "get_cached_workout_count", return_value=20):
+            # offset 0 always refreshes the newest page
+            self.assertTrue(
+                workout_cache.should_sync_workouts(source="oauth", account_key="k", requested_offset=0, requested_limit=9)
+            )
+            # window already cached
+            self.assertFalse(
+                workout_cache.should_sync_workouts(source="oauth", account_key="k", requested_offset=11, requested_limit=9)
+            )
+            # window beyond the cache
+            self.assertTrue(
+                workout_cache.should_sync_workouts(source="oauth", account_key="k", requested_offset=30, requested_limit=9)
+            )
 
 
 class WorkoutCacheFilterTests(TestCase):
