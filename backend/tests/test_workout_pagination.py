@@ -3,8 +3,12 @@ from unittest.mock import patch
 
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy.dialects import sqlite as sqlite_dialect
 
 from app.api.routes import workouts as workout_routes
+from app.db.workouts import workouts_table
+from app.services import workout_cache
 
 
 def _create_client() -> TestClient:
@@ -110,3 +114,31 @@ class WorkoutPaginationTests(TestCase):
             workout_routes._sync_api_key_workouts(client=client, account_key="account-key")
 
         self.assertEqual(client.workout_calls, [(1, 10), (2, 10)])
+
+
+class WorkoutCacheFilterTests(TestCase):
+    def test_name_filter_escapes_like_wildcards(self) -> None:
+        statement = workout_cache._apply_workout_filters(
+            select(workouts_table.c.title),
+            start_epoch=None,
+            end_epoch=None,
+            name="50%_x\\y",
+        )
+
+        compiled = statement.compile(dialect=sqlite_dialect.dialect())
+
+        self.assertIn("ESCAPE", str(compiled))
+        self.assertIn("%50\\%\\_x\\\\y%", list(compiled.params.values()))
+
+    def test_date_filters_are_applied(self) -> None:
+        statement = workout_cache._apply_workout_filters(
+            select(workouts_table.c.title),
+            start_epoch=100,
+            end_epoch=200,
+            name=None,
+        )
+
+        compiled = str(statement.compile(dialect=sqlite_dialect.dialect()))
+
+        self.assertIn("start_time_epoch", compiled)
+        self.assertEqual(len(list(statement.compile(dialect=sqlite_dialect.dialect()).params)), 2)

@@ -108,7 +108,9 @@ def _apply_workout_filters(statement: Any, *, start_epoch: int | None, end_epoch
     if end_epoch is not None:
         statement = statement.where(workouts_table.c.start_time_epoch < end_epoch)
     if name:
-        statement = statement.where(workouts_table.c.title.ilike(f"%{name.strip()}%"))
+        # Escape LIKE wildcards so user input is matched literally.
+        escaped = name.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        statement = statement.where(workouts_table.c.title.ilike(f"%{escaped}%", escape="\\"))
     return statement
 
 
