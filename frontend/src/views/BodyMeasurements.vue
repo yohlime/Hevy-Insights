@@ -14,7 +14,7 @@ import {
   Legend,
   Filler
 } from "chart.js";
-import { bodyMeasurementService } from "../services/api";
+import { useAddBodyMeasurementMutation, useBodyMeasurementsQuery } from "../composables/useBodyMeasurements";
 import { formatWeightPrecise, getWeightUnit, formatDate } from "../utils/formatters";
 import { useHevyCache } from "../stores/hevy_cache";
 
@@ -39,10 +39,12 @@ const primaryColor = computed(() => {
   return getComputedStyle(document.documentElement).getPropertyValue("--color-primary").trim() || "#10b981";
 });
 
-// State
-const measurements = ref<any[]>([]);
-const isLoading = ref(false);
-const error = ref<string | null>(null);
+// State (server data via TanStack Query)
+const measurementsQuery = useBodyMeasurementsQuery();
+const measurements = computed<any[]>(() => measurementsQuery.data.value ?? []);
+const isLoading = computed(() => measurementsQuery.isLoading.value);
+const error = computed(() => (measurementsQuery.error.value as Error | null)?.message ?? null);
+const addMeasurement = useAddBodyMeasurementMutation();
 const showAddModal = ref(false);
 const userHeight = ref(parseFloat(localStorage.getItem("user_height") || "0"));
 const bodyFatData = ref<Record<string, number>>(JSON.parse(localStorage.getItem("body_fat_data") || "{}"));
@@ -369,19 +371,7 @@ const chartOptions = computed(() => ({
 }));
 
 // Methods
-const loadMeasurements = async () => {
-  isLoading.value = true;
-  error.value = null;
-  
-  try {
-    measurements.value = await bodyMeasurementService.getMeasurements();
-  } catch (err: any) {
-    error.value = err.message;
-    measurements.value = [];
-  } finally {
-    isLoading.value = false;
-  }
-};
+const loadMeasurements = () => measurementsQuery.refetch();
 
 const saveMeasurement = async () => {
   if (!canSave.value) return;
@@ -403,15 +393,12 @@ const saveMeasurement = async () => {
       weightKg = weightKg / 2.20462;
     }
     
-    // Post measurement to backend
-    await bodyMeasurementService.addMeasurement({
+    // Post measurement to backend (cached history is invalidated on success)
+    await addMeasurement.mutateAsync({
       weight_kg: weightKg,
-      date: newMeasurement.value.date!
+      date: newMeasurement.value.date!,
     });
-    
-    // Reload measurements from backend to ensure UI is in sync
-    await loadMeasurements();
-    
+
     closeModal();
   } catch (err: any) {
     console.error("Error saving measurement:", err);
@@ -492,7 +479,6 @@ const getChangeClass = (index: number) => {
 // Lifecycle
 onMounted(async () => {
   await store.fetchUserAccount();
-  loadMeasurements();
 });
 </script>
 
