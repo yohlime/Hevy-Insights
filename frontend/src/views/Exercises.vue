@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from "vue";
+import { computed, ref, onMounted, watch } from "vue";
 import { useHevyCache } from "../stores/hevy_cache";
 import { formatWeight, getWeightUnit, getDistanceUnit, formatPRValue, formatDate } from "../utils/formatters";
 import { detectExerciseType, formatDurationSeconds, formatDistance, isBodyweightExercise } from "../utils/exerciseTypeDetector";
@@ -7,6 +7,7 @@ import { analyzeProgression, estimate1RM } from "../utils/progressiveOverload";
 import { Scatter, Bar, Line } from "vue-chartjs";
 import { useI18n } from "vue-i18n";
 import { authService } from "../services/api";
+import { useBodyMeasurementsQuery } from "../composables/useBodyMeasurements";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -65,6 +66,21 @@ const userBodyWeight = ref<number>(0);
 
 // Check if using Hevy PRO API (no body measurements available)
 const isUsingProApi = ref<boolean>(false);
+const authResolved = ref<boolean>(false);
+
+// Latest body weight for rep-volume calculations. Shared query key with the
+// Body Measurements view, so the request is deduped/cached across views.
+const bodyMeasurementsQuery = useBodyMeasurementsQuery(computed(() => authResolved.value && !isUsingProApi.value));
+
+watch(
+  bodyMeasurementsQuery.data,
+  (data) => {
+    if (isUsingProApi.value || !Array.isArray(data) || data.length === 0) return;
+    const latest = [...data].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    userBodyWeight.value = latest?.weight_kg || 0;
+  },
+  { immediate: true },
+);
 
 // Search by exercise name (debounced)
 const search = ref("");
@@ -164,24 +180,9 @@ onMounted(async () => {
   // Check auth mode from backend
   const authStatus = await authService.getAuthStatus();
   isUsingProApi.value = authStatus.auth_mode === "api_key";
-  
-  // Load body weight for rep volume calculations (free API only)
-  if (!isUsingProApi.value) {
-    try {
-      const { bodyMeasurementService } = await import("../services/api");
-      const measurements = await bodyMeasurementService.getMeasurements();
-      if (measurements && measurements.length > 0) {
-        // Get most recent measurement
-        const sorted = [...measurements].sort((a: any, b: any) => {
-          return new Date(b.date).getTime() - new Date(a.date).getTime();
-        });
-        userBodyWeight.value = sorted[0].weight_kg || 0;
-      }
-    } catch (error) {
-      // Body measurements not available. TODO: Better error handling
-      console.log("Body measurements not available:", error);
-    }
-  }
+  // The body-measurements query is enabled once the auth mode is known
+  // (free API only); its watcher populates `userBodyWeight`.
+  authResolved.value = true;
 
   // Load prescribed rep targets from routines (OAuth only; PRO API keys cannot read routines)
   if (!isUsingProApi.value) {

@@ -1,3 +1,4 @@
+import type { MaybeRefOrGetter } from "vue";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import { bodyMeasurementService } from "../services/api";
 
@@ -11,10 +12,11 @@ export interface BodyMeasurementInput {
 }
 
 /** Cached body-measurement history (shared across views, deduped by query key). */
-export function useBodyMeasurementsQuery() {
+export function useBodyMeasurementsQuery(enabled: MaybeRefOrGetter<boolean> = true) {
   return useQuery({
     queryKey: bodyMeasurementKeys.all,
     queryFn: () => bodyMeasurementService.getMeasurements(),
+    enabled,
   });
 }
 
