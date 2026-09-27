@@ -141,6 +141,9 @@
       "title": "Workouts",
       "subtitle": "Durchsuche deine Workouts im Listenformat mit Aktivitätskalender.",
       "searchContains": "Enthält…",
+      "dayFilter": "Einzelner Tag",
+      "showingCount": "{shown} von {total} angezeigt",
+      "endOfList": "Keine weiteren Workouts",
       "set": "Satz",
       "reps": "Wdh."
     }

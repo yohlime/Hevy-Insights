@@ -93,13 +93,20 @@ export const userService = {
 
 // Workout Service
 export const workoutService = {
-  async getWorkouts(username: string, offset: number = 0, limit: number = 50): Promise<any> {
+  async getWorkouts(
+    username: string,
+    offset: number = 0,
+    limit: number = 50,
+    filters: { name?: string; startEpoch?: number | null; endEpoch?: number | null } = {},
+  ): Promise<any> {
     // Backend determines OAuth2 vs API key mode from cookies
     // Backend serves larger cached pages while syncing Hevy with upstream page limits.
     const page = Math.floor(offset / limit) + 1;
-    const response = await api.get("/workouts", {
-      params: { username, offset, limit, page, page_size: limit },
-    });
+    const params: Record<string, unknown> = { username, offset, limit, page, page_size: limit };
+    if (filters.name) params.name = filters.name;
+    if (filters.startEpoch != null) params.start_epoch = filters.startEpoch;
+    if (filters.endEpoch != null) params.end_epoch = filters.endEpoch;
+    const response = await api.get("/workouts", { params });
     return parseApiResponse(workoutsResponseSchema, response.data, "/workouts");
   },
 };

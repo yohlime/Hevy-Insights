@@ -1,6 +1,8 @@
-import { computed, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/vue-query";
 import { useHevyCache } from "../stores/hevy_cache";
+import { workoutService } from "../services/api";
 
 export type TimeRange = "all" | "1w" | "1m" | "3m" | "6m" | "12m";
 
@@ -9,51 +11,122 @@ export interface PRItem {
   value: number | string;
 }
 
+interface WorkoutFilters {
+  name?: string;
+  startEpoch: number | null;
+  endEpoch: number | null;
+}
+
+interface WorkoutPage {
+  workouts: any[];
+  total: number;
+}
+
+const RANGE_DAYS: Record<Exclude<TimeRange, "all">, number> = {
+  "1w": 7,
+  "1m": 30,
+  "3m": 90,
+  "6m": 180,
+  "12m": 360,
+};
+
+interface UseWorkoutsViewOptions {
+  /** Accumulate pages instead of replacing them (infinite scroll). */
+  infinite?: boolean;
+  /** Initial single-day filter (`YYYY-MM-DD`) from a deep link. */
+  initialDay?: string;
+}
+
+type HevyCacheStore = ReturnType<typeof useHevyCache>;
+
+async function fetchWorkoutPage(store: HevyCacheStore, page: number, pageSize: number, filters: WorkoutFilters): Promise<WorkoutPage> {
+  if (store.dataSource === "csv") {
+    if (!store.workouts.length) await store.fetchWorkouts();
+    const filtered = [...store.workouts]
+      .sort((a, b) => (b.start_time || 0) - (a.start_time || 0))
+      .filter((w) => (filters.startEpoch == null || (w.start_time || 0) >= filters.startEpoch) && (filters.endEpoch == null || (w.start_time || 0) < filters.endEpoch))
+      .filter((w) => !filters.name || String(w.title || w.name || "").toLowerCase().includes(filters.name.toLowerCase()));
+    return { workouts: filtered.slice((page - 1) * pageSize, page * pageSize), total: filtered.length };
+  }
+
+  if (!store.username) {
+    await store.fetchUserAccount();
+  }
+  const result = await workoutService.getWorkouts(store.username ?? "", (page - 1) * pageSize, pageSize, {
+    name: filters.name,
+    startEpoch: filters.startEpoch,
+    endEpoch: filters.endEpoch,
+  });
+  return { workouts: result.workouts ?? [], total: result.total_count ?? (result.workouts?.length ?? 0) };
+}
+
 /**
- * Shared logic for the Workouts card and list views: data loading, date-range
- * filtering, global workout indexing (#N) and the various display helpers.
- * Card/list specific state (pagination, search, expansion) stays in the views.
+ * Shared logic for the Workouts card and list views, backed by TanStack Query.
+ *
+ * `{ infinite: true }` accumulates pages (`loadMore` drives infinite scroll);
+ * otherwise page-numbered navigation replaces the page.
  */
-export function useWorkoutsView() {
+export function useWorkoutsView(pageSize = 9, options: UseWorkoutsViewOptions = {}) {
+  const infinite = options.infinite === true;
   const { t } = useI18n();
   const store = useHevyCache();
   const userAccount = computed(() => store.userAccount);
 
-  const filterRange = ref<TimeRange>("all");
-  const loading = computed(() => store.isLoadingWorkouts || store.isLoadingUser);
+  const timeRange = ref<TimeRange>("all");
+  const searchName = ref("");
+  const currentPage = ref(1);
+  const dayStart = ref<number | null>(null);
+  const dayEnd = ref<number | null>(null);
 
-  // Sort newest → oldest for consistent indexing (#N)
-  const allWorkoutsSorted = computed(() =>
-    [...store.workouts].sort((a: any, b: any) => (b.start_time || 0) - (a.start_time || 0)),
-  );
+  function startEpochForRange(range: TimeRange): number | null {
+    if (range === "all") return null;
+    const days = RANGE_DAYS[range] ?? 90;
+    return Math.floor(Date.now() / 1000) - days * 24 * 3600;
+  }
 
-  const filteredWorkouts = computed(() => {
-    if (filterRange.value === "all") return allWorkoutsSorted.value;
-    const nowSec = Math.floor(Date.now() / 1000);
-    let days: number;
-    switch (filterRange.value) {
-      case "1w": days = 7; break;
-      case "1m": days = 30; break;
-      case "3m": days = 90; break;
-      case "6m": days = 180; break;
-      case "12m": days = 360; break; // 12 x 30-day months for consistency
-      default: days = 90; // fallback
-    }
-    const cutoff = nowSec - days * 24 * 3600;
-    return allWorkoutsSorted.value.filter((w: any) => (w.start_time || 0) >= cutoff);
+  function applyDay(day: string) {
+    const [year, month, dayOfMonth] = day.split("-").map(Number);
+    if (!year || !month || !dayOfMonth) return;
+    dayStart.value = Math.floor(new Date(year, month - 1, dayOfMonth, 0, 0, 0, 0).getTime() / 1000);
+    dayEnd.value = Math.floor(new Date(year, month - 1, dayOfMonth + 1, 0, 0, 0, 0).getTime() / 1000);
+  }
+
+  if (options.initialDay) applyDay(options.initialDay);
+
+  const filters = computed<WorkoutFilters>(() => {
+    const isDay = dayStart.value != null;
+    return {
+      name: searchName.value.trim() || undefined,
+      startEpoch: isDay ? dayStart.value : startEpochForRange(timeRange.value),
+      endEpoch: isDay ? dayEnd.value : null,
+    };
   });
 
-  // Global index number (#N): oldest = #1, newest = #total
-  const workoutIndex = (workoutId: string): string | number => {
-    const idx = allWorkoutsSorted.value.findIndex((w: any) => w.id === workoutId);
-    if (idx < 0) return "?";
-    return allWorkoutsSorted.value.length - idx;
-  };
+  // Any filter change starts again from the first page.
+  watch(filters, () => {
+    currentPage.value = 1;
+  });
+  // Picking a date range clears any single-day deep-link filter.
+  watch(timeRange, () => {
+    dayStart.value = null;
+    dayEnd.value = null;
+  });
+
+  function setDayFilter(day: string) {
+    applyDay(day);
+    currentPage.value = 1;
+  }
+  const isDayFiltered = computed(() => dayStart.value != null);
+  function clearDayFilter() {
+    if (dayStart.value == null) return;
+    dayStart.value = null;
+    dayEnd.value = null;
+    currentPage.value = 1;
+  }
 
   const totalSets = (workout: any): number =>
     (workout.exercises || []).reduce((sum: number, ex: any) => sum + ((ex.sets || []).length), 0);
 
-  // Biometrics from Hevy API payload
   const biometrics = (workout: any) => {
     const bio = workout?.biometrics;
     if (!bio || typeof bio !== "object") return null;
@@ -71,7 +144,6 @@ export function useWorkoutsView() {
     return typeof cal === "number" ? `${Math.round(cal)} kcal` : null;
   };
 
-  // PR helpers based on sets.prs / sets.personalRecords
   const extractSetPRs = (set: any): PRItem[] => {
     const prsArr = Array.isArray(set?.prs) ? set.prs : (set?.prs ? [set.prs] : []);
     const personalArr = Array.isArray(set?.personalRecords) ? set.personalRecords : (set?.personalRecords ? [set.personalRecords] : []);
@@ -91,7 +163,6 @@ export function useWorkoutsView() {
     });
   };
 
-  // Translate PR type names using i18n keys
   const getLocalizedPRType = (prType: string): string => {
     const key = `dashboard.prTypes.${prType}`;
     const translation = t(key);
@@ -99,17 +170,16 @@ export function useWorkoutsView() {
     return translation;
   };
 
-  const ensureWorkoutsLoaded = () => store.fetchWorkouts();
-
-  return {
+  const common = {
     store,
     userAccount,
     t,
-    filterRange,
-    loading,
-    allWorkoutsSorted,
-    filteredWorkouts,
-    workoutIndex,
+    timeRange,
+    searchName,
+    currentPage,
+    setDayFilter,
+    clearDayFilter,
+    isDayFiltered,
     totalSets,
     biometrics,
     bpmDisplay,
@@ -117,6 +187,108 @@ export function useWorkoutsView() {
     extractSetPRs,
     exercisePRs,
     getLocalizedPRType,
-    ensureWorkoutsLoaded,
+  };
+
+  if (infinite) {
+    const query = useInfiniteQuery({
+      queryKey: computed(() => ["workouts", "infinite", filters.value, pageSize]),
+      queryFn: ({ pageParam }) => fetchWorkoutPage(store, pageParam as number, pageSize, filters.value),
+      initialPageParam: 1,
+      getNextPageParam: (lastPage, allPages, lastPageParam) => {
+        const loaded = allPages.reduce((sum, page) => sum + page.workouts.length, 0);
+        if (loaded >= lastPage.total || lastPage.workouts.length === 0) return undefined;
+        return (lastPageParam as number) + 1;
+      },
+    });
+
+    const pageItems = computed(() => (query.data.value?.pages ?? []).flatMap((page) => page.workouts));
+    const totalCount = computed(() => query.data.value?.pages?.[0]?.total ?? 0);
+    const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize)));
+    const hasMore = computed(() => query.hasNextPage.value === true);
+    const loading = computed(() => query.isLoading.value);
+    const isFetchingMore = computed(() => query.isFetchingNextPage.value);
+
+    const workoutIndexAt = (indexInList: number): number => totalCount.value - indexInList;
+    const load = () => query.refetch();
+    const loadMore = () => {
+      if (query.hasNextPage.value && !query.isFetchingNextPage.value) return query.fetchNextPage();
+      return Promise.resolve();
+    };
+    const goToWorkoutNumber = async (num: number | null): Promise<boolean> => {
+      if (!num || num < 1 || num > totalCount.value) return false;
+      const targetPage = Math.floor((totalCount.value - num) / pageSize) + 1;
+      while ((query.data.value?.pages.length ?? 0) < targetPage && query.hasNextPage.value) {
+        await query.fetchNextPage();
+      }
+      await nextTick();
+      document.querySelector(`[data-workout-index="${num}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return true;
+    };
+
+    return {
+      ...common,
+      infinite: true,
+      pageItems,
+      totalCount,
+      totalPages,
+      hasMore,
+      hasPrev: computed(() => false),
+      loading,
+      isFetchingMore,
+      load,
+      loadMore,
+      workoutIndexAt,
+      goToWorkoutNumber,
+      nextPage: () => Promise.resolve(),
+      prevPage: () => Promise.resolve(),
+      firstPage: () => Promise.resolve(),
+      lastPage: () => Promise.resolve(),
+    };
+  }
+
+  const query = useQuery({
+    queryKey: computed(() => ["workouts", "page", filters.value, currentPage.value, pageSize]),
+    queryFn: () => fetchWorkoutPage(store, currentPage.value, pageSize, filters.value),
+    placeholderData: keepPreviousData,
+  });
+
+  const pageItems = computed(() => query.data.value?.workouts ?? []);
+  const totalCount = computed(() => query.data.value?.total ?? 0);
+  const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize)));
+  const hasMore = computed(() => currentPage.value < totalPages.value);
+  const hasPrev = computed(() => currentPage.value > 1);
+  const loading = computed(() => query.isLoading.value);
+
+  const workoutIndexAt = (indexInList: number): number =>
+    totalCount.value - ((currentPage.value - 1) * pageSize + indexInList);
+  const load = () => query.refetch();
+  const nextPage = () => { if (hasMore.value) currentPage.value += 1; };
+  const prevPage = () => { if (hasPrev.value) currentPage.value -= 1; };
+  const firstPage = () => { currentPage.value = 1; };
+  const lastPage = () => { currentPage.value = totalPages.value; };
+  const goToWorkoutNumber = (num: number | null): boolean => {
+    if (!num || num < 1 || num > totalCount.value) return false;
+    currentPage.value = Math.floor((totalCount.value - num) / pageSize) + 1;
+    return true;
+  };
+
+  return {
+    ...common,
+    infinite: false,
+    pageItems,
+    totalCount,
+    totalPages,
+    hasMore,
+    hasPrev,
+    loading,
+    isFetchingMore: computed(() => false),
+    load,
+    loadMore: () => Promise.resolve(),
+    nextPage,
+    prevPage,
+    firstPage,
+    lastPage,
+    workoutIndexAt,
+    goToWorkoutNumber,
   };
 }

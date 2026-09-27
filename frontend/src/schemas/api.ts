@@ -72,6 +72,7 @@ export const workoutsResponseSchema = z.object({
   page_count: nullableNumberSchema,
   page_size: nullableNumberSchema,
   workout_count: nullableNumberSchema,
+  total_count: nullableNumberSchema,
 }).catchall(z.unknown());
 
 export const bodyMeasurementSchema = z.object({

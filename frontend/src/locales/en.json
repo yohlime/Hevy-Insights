@@ -141,6 +141,9 @@
       "title": "Workouts",
       "subtitle": "Browse your workouts in a detailed list format with contribution calendar.",
       "searchContains": "Contains…",
+      "dayFilter": "Showing a single day",
+      "showingCount": "Showing {shown} of {total}",
+      "endOfList": "No more workouts",
       "set": "Set",
       "reps": "Reps"
     }

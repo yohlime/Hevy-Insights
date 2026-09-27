@@ -141,6 +141,9 @@
       "title": "Entrenamientos",
       "subtitle": "Explora tus entrenos en formato de lista detallada con calendario.",
       "searchContains": "Contiene…",
+      "dayFilter": "Mostrando un solo día",
+      "showingCount": "Mostrando {shown} de {total}",
+      "endOfList": "No hay más entrenamientos",
       "set": "Serie",
       "reps": "Reps"
     }

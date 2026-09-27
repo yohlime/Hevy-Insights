@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref } from "vue";
 import { formatDurationFromTimestamps, formatWeight, getWeightUnit, formatPRValue, formatDateTime } from "../utils/formatters";
 import { detectExerciseType, formatDurationSeconds, formatDistance } from "../utils/exerciseTypeDetector";
 import WorkoutsViewToggle from "../components/WorkoutsViewToggle.vue";
@@ -8,39 +8,34 @@ import { useWorkoutsView, type TimeRange } from "../composables/useWorkoutsView"
 const {
   store,
   userAccount,
-  filterRange,
+  timeRange,
   loading,
-  filteredWorkouts,
-  workoutIndex,
+  pageItems,
+  totalPages,
+  hasMore,
+  hasPrev,
+  currentPage,
+  nextPage,
+  prevPage,
+  firstPage,
+  lastPage,
+  workoutIndexAt,
   totalSets,
   bpmDisplay,
   caloriesDisplay,
   exercisePRs,
   getLocalizedPRType,
-  ensureWorkoutsLoaded,
-} = useWorkoutsView();
+} = useWorkoutsView(9);
 
 // Card-specific UI state
-const currentPage = ref(1);
-const workoutsPerPage = 9; // 3 columns x 3 rows per page
 const expandedExercises = ref<Record<string, boolean>>({}); // exercise.id -> expanded
-
-const paginatedWorkouts = computed(() => {
-  const start = (currentPage.value - 1) * workoutsPerPage;
-  return filteredWorkouts.value.slice(start, start + workoutsPerPage);
-});
-
-const totalPages = computed(() => Math.ceil(filteredWorkouts.value.length / workoutsPerPage) || 1);
-const hasMore = computed(() => currentPage.value < totalPages.value);
-const hasPrev = computed(() => currentPage.value > 1);
-
-const nextPage = () => { if (hasMore.value) currentPage.value++; };
-const prevPage = () => { if (hasPrev.value) currentPage.value--; };
-const firstPage = () => { currentPage.value = 1; };
-const lastPage = () => { currentPage.value = totalPages.value; };
 
 const formatDate = (timestamp: number) => formatDateTime(new Date(timestamp * 1000));
 const exerciseHasPR = (exercise: any) => exercisePRs(exercise).length > 0;
+
+const onChangeRange = (event: Event) => {
+  timeRange.value = (event.target as HTMLSelectElement).value as TimeRange;
+};
 
 const toggleExercise = (exerciseId: string) => {
   // Create a new object to ensure reactivity
@@ -49,15 +44,6 @@ const toggleExercise = (exerciseId: string) => {
     [exerciseId]: !expandedExercises.value[exerciseId],
   };
 };
-
-const onChangeFilter = (val: TimeRange) => {
-  filterRange.value = val;
-  currentPage.value = 1;
-};
-
-onMounted(async () => {
-  await ensureWorkoutsLoaded();
-});
 </script>
 
 <!-- ===============================================================================  -->
@@ -111,7 +97,7 @@ onMounted(async () => {
         </div>
         <div class="filters">
           <label class="filter-label">{{ $t('global.timeRangeFilter.timeRange') }}</label>
-          <select class="filter-select" :value="filterRange" @change="onChangeFilter(($event.target as HTMLSelectElement).value as any)">
+          <select class="filter-select" :value="timeRange" @change="onChangeRange">
             <option value="all">{{ $t('global.timeRangeFilter.allTime') }}</option>
             <option value="1w">{{ $t('global.timeRangeFilter.lastWeek') }}</option>
             <option value="1m">{{ $t('global.timeRangeFilter.lastMonth') }}</option>
@@ -124,11 +110,11 @@ onMounted(async () => {
 
       <div class="grid">
         <!--  Workout Cards  -->
-        <div v-for="workout in paginatedWorkouts" :key="workout.id" class="card">
+        <div v-for="(workout, i) in pageItems" :key="workout.id" class="card">
           <!-- Workout Card Header  -->
           <div class="card-header">
             <div class="title-row">
-              <span class="index-pill">#{{ workoutIndex(workout.id) }}</span>
+              <span class="index-pill">#{{ workoutIndexAt(i) }}</span>
               <h2>{{ workout.title || workout.name || "Unnamed Workout" }}</h2>
             </div>
             <div class="header-meta">
@@ -216,7 +202,7 @@ onMounted(async () => {
         </div>
         <div class="filters">
           <label class="filter-label">{{ $t('global.timeRangeFilter.timeRange') }}</label>
-          <select class="filter-select" :value="filterRange" @change="onChangeFilter(($event.target as HTMLSelectElement).value as any)">
+          <select class="filter-select" :value="timeRange" @change="onChangeRange">
             <option value="all">{{ $t('global.timeRangeFilter.allTime') }}</option>
             <option value="1w">{{ $t('global.timeRangeFilter.lastWeek') }}</option>
             <option value="1m">{{ $t('global.timeRangeFilter.lastMonth') }}</option>

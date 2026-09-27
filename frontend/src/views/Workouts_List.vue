@@ -1,39 +1,46 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, watch } from "vue";
+import { ref, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRoute } from "vue-router";
 import { formatDurationFromTimestamps, formatWeight, getWeightUnit, formatPRValue, formatDateTime } from "../utils/formatters";
 import { detectExerciseType, formatDurationSeconds, formatDistance } from "../utils/exerciseTypeDetector";
 import WorkoutsViewToggle from "../components/WorkoutsViewToggle.vue";
-import { useWorkoutsView } from "../composables/useWorkoutsView";
+import { useWorkoutsView, type TimeRange } from "../composables/useWorkoutsView";
+
+const route = useRoute();
+const initialDay = typeof route.query.day === "string" ? route.query.day : undefined;
 
 const {
   store,
   userAccount,
   t,
-  filterRange,
+  timeRange,
+  searchName,
+  pageItems,
+  totalCount,
+  hasMore,
   loading,
-  filteredWorkouts,
-  workoutIndex,
+  isFetchingMore,
+  loadMore,
+  workoutIndexAt,
+  goToWorkoutNumber,
+  setDayFilter,
+  clearDayFilter,
+  isDayFiltered,
   totalSets,
   bpmDisplay,
   caloriesDisplay,
   extractSetPRs,
   exercisePRs,
   getLocalizedPRType,
-  ensureWorkoutsLoaded,
-} = useWorkoutsView();
-
-const route = useRoute();
+} = useWorkoutsView(20, { infinite: true, initialDay });
 
 // List-specific UI state
 const expanded = ref<Record<string, boolean>>({});
+const workoutNumberInput = ref<number | null>(null);
+const sentinel = ref<HTMLElement | null>(null);
+let observer: IntersectionObserver | null = null;
 
-// Extra filters
-const filters = ref<{ workoutNumber: number | null; workoutName: string }>(
-  { workoutNumber: null, workoutName: "" }
-);
-
-// Debounced workout name search
+// Debounced workout name search (applied server-side)
 let workoutNameDebounceTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function handleWorkoutNameInput(event: Event) {
@@ -44,26 +51,19 @@ function handleWorkoutNameInput(event: Event) {
     clearTimeout(workoutNameDebounceTimeout);
   }
 
-  // Only update filters.workoutName after 300ms of no typing
+  // Only update the query after 300ms of no typing
   workoutNameDebounceTimeout = setTimeout(() => {
-    filters.value.workoutName = value;
+    searchName.value = value;
   }, 300);
 }
 
-// Combine date filter with creative filters
-const filteredAndSearchedWorkouts = computed(() => {
-  const base = filteredWorkouts.value;
-  return base.filter((w: any) => {
-    // Workout number exact match
-    if (filters.value.workoutNumber && workoutIndex(w.id) !== filters.value.workoutNumber) return false;
-    // Name contains (case-insensitive)
-    if (filters.value.workoutName) {
-      const name = (w.name || '').toLowerCase();
-      if (!name.includes(filters.value.workoutName.toLowerCase())) return false;
-    }
-    return true;
-  });
-});
+function jumpToWorkoutNumber() {
+  goToWorkoutNumber(workoutNumberInput.value);
+}
+
+const onChangeRange = (event: Event) => {
+  timeRange.value = (event.target as HTMLSelectElement).value as TimeRange;
+};
 
 // Helpers
 const formatDateFull = (timestamp: number) => {
@@ -86,31 +86,35 @@ const workoutPRCount = (workout: any) => {
   return count;
 };
 
-// Auto-expand and scroll to workouts on a given day
-const scrollToDay = async (day: string) => {
-  // Find workouts in the current filtered/search list that match the date
-  const workouts = filteredAndSearchedWorkouts.value.filter((w: any) => {
-    const date = new Date((w.start_time || 0) * 1000);
-    // Use local date instead of UTC to avoid timezone grouping issues
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    return key === day;
-  });
-  for (const w of workouts) expanded.value[w.id] = true;
-  await nextTick();
-  const el = document.querySelector(`[data-day="${day}"]`) as HTMLElement;
-  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-};
-
 const toggleItem = (id: string) => { expanded.value[id] = !expanded.value[id]; };
 
-onMounted(async () => {
-  await ensureWorkoutsLoaded();
-  const dayParam = route.query.day;
-  if (dayParam) await scrollToDay(String(dayParam));
+onMounted(() => {
+  // Infinite scroll: load the next page as the sentinel enters the viewport.
+  observer = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        loadMore();
+      }
+    },
+    { rootMargin: "300px" },
+  );
+  if (sentinel.value) observer.observe(sentinel.value);
 });
 
-watch(() => route.query.day, async (d) => {
-  if (d) await scrollToDay(String(d));
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  observer = null;
+});
+
+watch(() => route.query.day, (d) => {
+  if (typeof d === "string") setDayFilter(d);
+});
+
+// When viewing a single day (Dashboard deep link), expand its workouts.
+watch(pageItems, (items) => {
+  if (isDayFiltered.value) {
+    for (const w of items as any[]) expanded.value[w.id] = true;
+  }
 });
 </script>
 
@@ -148,10 +152,10 @@ watch(() => route.query.day, async (d) => {
     </div>
 
     <!-- Top filters (time range, workout number, name) -->
-    <div v-if="!loading" class="top-filters">
+    <div v-if="!loading || pageItems.length" class="top-filters">
       <div class="filter-group">
         <label class="filter-label">{{ $t('global.timeRangeFilter.timeRange') }}</label>
-        <select class="filter-select" v-model="filterRange">
+        <select class="filter-select" :value="timeRange" @change="onChangeRange">
           <option value="all">{{ $t('global.timeRangeFilter.allTime') }}</option>
           <option value="1w">{{ $t('global.timeRangeFilter.lastWeek') }}</option>
           <option value="1m">{{ $t('global.timeRangeFilter.lastMonth') }}</option>
@@ -162,7 +166,7 @@ watch(() => route.query.day, async (d) => {
       </div>
       <div class="filter-group">
         <label class="filter-label">{{ $t('global.searchFilter.byNumber') }}</label>
-        <input class="filter-input" type="number" min="1" placeholder="#" v-model.number="filters.workoutNumber" />
+        <input class="filter-input" type="number" min="1" placeholder="#" v-model.number="workoutNumberInput" @change="jumpToWorkoutNumber" @keyup.enter="jumpToWorkoutNumber" />
       </div>
       <div class="filter-group">
         <label class="filter-label">{{ $t('global.searchFilter.byName') }}</label>
@@ -173,20 +177,30 @@ watch(() => route.query.day, async (d) => {
           @input="handleWorkoutNameInput"
         />
       </div>
+
+      <div v-if="isDayFiltered" class="day-filter-banner">
+        <span>{{ $t('workouts.list.dayFilter') }}</span>
+        <button type="button" class="day-filter-clear" @click="clearDayFilter">✕</button>
+      </div>
+    </div>
+
+    <!-- Infinite scroll count -->
+    <div v-if="pageItems.length" class="list-count">
+      {{ $t('workouts.list.showingCount', { shown: pageItems.length, total: totalCount }) }}
     </div>
 
     <!-- Loading state -->
-    <div v-if="loading" class="loading-container">
+    <div v-if="loading && pageItems.length === 0" class="loading-container">
       <div class="loading-spinner"></div>
       <p>{{ $t('global.loadingSpinnerText') }}</p>
     </div>
 
     <div v-else class="list">
-      <div v-for="workout in filteredAndSearchedWorkouts" :key="workout.id" class="item" :data-day="(() => { const d = new Date(workout.start_time * 1000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })()">
+      <div v-for="(workout, i) in pageItems" :key="workout.id" class="item" :data-workout-index="workoutIndexAt(i)" :data-day="(() => { const d = new Date(workout.start_time * 1000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })()">
         <!-- Collapsed line -->
         <button class="item-toggle" @click="toggleItem(workout.id)">
           <div class="line">
-            <span class="pill pill-green">#{{ workoutIndex(workout.id) }}</span>
+            <span class="pill pill-green">#{{ workoutIndexAt(i) }}</span>
             <span class="line-date">{{ formatDateFull(workout.start_time) }}</span>
             <span class="line-sep">•</span>
             <span class="line-name">{{ workout.title || workout.name || "Unnamed" }}</span>
@@ -272,6 +286,15 @@ watch(() => route.query.day, async (d) => {
         </div>
         </Transition>
       </div>
+    </div>
+
+    <!-- Infinite scroll sentinel -->
+    <div ref="sentinel" class="scroll-sentinel" aria-hidden="true"></div>
+    <div v-if="isFetchingMore" class="loading-more">
+      <div class="loading-spinner"></div>
+    </div>
+    <div v-else-if="!hasMore && pageItems.length" class="end-of-list">
+      {{ $t('workouts.list.endOfList') }}
     </div>
   </div>
 </template>
@@ -461,6 +484,12 @@ watch(() => route.query.day, async (d) => {
   .toggle-icon { color: var(--text-secondary); margin-left: 0.5rem; }
 
   /* Top filters */
+  .list-count { color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem; }
+  .scroll-sentinel { height: 1px; }
+  .loading-more { display: flex; justify-content: center; padding: 1.25rem; }
+  .end-of-list { text-align: center; color: var(--text-secondary); font-size: 0.85rem; padding: 1.25rem; }
+  .day-filter-banner { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 1rem; padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(59, 130, 246, 0.12); color: #60a5fa; font-size: 0.85rem; }
+  .day-filter-clear { background: transparent; border: none; color: inherit; cursor: pointer; font-size: 0.9rem; }
   .top-filters { display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
   .top-filters .filter-group { display: flex; flex-direction: column; gap: 0.25rem; }
   .filter-label { color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; }
