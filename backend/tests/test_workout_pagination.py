@@ -23,6 +23,7 @@ class WorkoutPaginationTests(TestCase):
             patch.object(workout_routes, "get_hevy_client", return_value=object()),
             patch.object(workout_routes, "oauth_account_key", return_value="user"),
             patch.object(workout_routes, "should_sync_workouts", return_value=False) as should_sync_workouts,
+            patch.object(workout_routes, "get_cached_workout_count", return_value=50) as get_cached_workout_count,
             patch.object(workout_routes, "get_cached_workouts", return_value=cached_workouts) as get_cached_workouts,
         ):
             client = _create_client()
@@ -31,8 +32,14 @@ class WorkoutPaginationTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["workouts"]), 50)
+        self.assertEqual(response.json()["total_count"], 50)
         should_sync_workouts.assert_called_once_with(source="oauth", account_key="user", requested_offset=0, requested_limit=50)
-        get_cached_workouts.assert_called_once_with(source="oauth", account_key="user", offset=0, limit=50)
+        get_cached_workout_count.assert_called_once_with(
+            source="oauth", account_key="user", start_epoch=None, end_epoch=None, name=None
+        )
+        get_cached_workouts.assert_called_once_with(
+            source="oauth", account_key="user", offset=0, limit=50, start_epoch=None, end_epoch=None, name=None
+        )
 
     def test_api_key_workouts_sync_in_hevy_sized_pages_and_return_requested_page_size(self) -> None:
         cached_workouts = [{"id": str(index), "title": f"Workout {index}", "exercises": []} for index in range(50)]
@@ -42,6 +49,7 @@ class WorkoutPaginationTests(TestCase):
             patch.object(workout_routes, "api_key_account_key", return_value="account-key"),
             patch.object(workout_routes, "should_sync_workouts", return_value=True),
             patch.object(workout_routes, "_sync_api_key_workouts") as sync_api_key_workouts,
+            patch.object(workout_routes, "get_cached_workout_count", return_value=120),
             patch.object(workout_routes, "get_cached_workouts", return_value=cached_workouts) as get_cached_workouts,
         ):
             client = _create_client()
@@ -50,9 +58,36 @@ class WorkoutPaginationTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["workouts"]), 50)
+        self.assertEqual(response.json()["total_count"], 120)
         get_hevy_client.assert_called_once_with(api_key_cookie="api-key")
         sync_api_key_workouts.assert_called_once_with(client=sync_api_key_workouts.call_args.kwargs["client"], account_key="account-key")
-        get_cached_workouts.assert_called_once_with(source="api_key", account_key="account-key", offset=50, limit=50)
+        get_cached_workouts.assert_called_once_with(
+            source="api_key", account_key="account-key", offset=50, limit=50, start_epoch=None, end_epoch=None, name=None
+        )
+
+    def test_filters_and_total_count_are_forwarded(self) -> None:
+        with (
+            patch.object(workout_routes, "get_hevy_client", return_value=object()),
+            patch.object(workout_routes, "oauth_account_key", return_value="user"),
+            patch.object(workout_routes, "should_sync_workouts", return_value=False),
+            patch.object(workout_routes, "get_cached_workout_count", return_value=7) as get_cached_workout_count,
+            patch.object(workout_routes, "get_cached_workouts", return_value=[]) as get_cached_workouts,
+        ):
+            client = _create_client()
+            client.cookies.set("hevy_access_token", "access-token")
+            response = client.get(
+                "/api/workouts",
+                params={"username": "user", "offset": 0, "limit": 9, "start_epoch": 1000, "end_epoch": 2000, "name": "push"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["total_count"], 7)
+        get_cached_workout_count.assert_called_once_with(
+            source="oauth", account_key="user", start_epoch=1000, end_epoch=2000, name="push"
+        )
+        get_cached_workouts.assert_called_once_with(
+            source="oauth", account_key="user", offset=0, limit=9, start_epoch=1000, end_epoch=2000, name="push"
+        )
 
     def test_api_key_sync_fetches_hevy_in_ten_workout_pages(self) -> None:
         class FakeAPIKeyClient:

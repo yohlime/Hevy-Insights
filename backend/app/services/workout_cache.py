@@ -46,36 +46,70 @@ def is_workout_sync_complete(*, source: WorkoutSource, account_key: str) -> bool
     return bool(row[0]) if row else False
 
 
-def get_cached_workout_count(*, source: WorkoutSource, account_key: str) -> int:
+def get_cached_workout_count(
+    *,
+    source: WorkoutSource,
+    account_key: str,
+    start_epoch: int | None = None,
+    end_epoch: int | None = None,
+    name: str | None = None,
+) -> int:
+    statement = (
+        select(func.count())
+        .select_from(workouts_table)
+        .where(
+            workouts_table.c.source == source,
+            workouts_table.c.account_key == account_key,
+        )
+    )
+    statement = _apply_workout_filters(statement, start_epoch=start_epoch, end_epoch=end_epoch, name=name)
+
     with engine.begin() as connection:
-        count = connection.execute(
-            select(func.count()).select_from(workouts_table).where(
-                workouts_table.c.source == source,
-                workouts_table.c.account_key == account_key,
-            )
-        ).scalar_one()
+        count = connection.execute(statement).scalar_one()
 
     return int(count)
 
 
-def get_cached_workouts(*, source: WorkoutSource, account_key: str, offset: int, limit: int) -> list[JsonDict]:
+def get_cached_workouts(
+    *,
+    source: WorkoutSource,
+    account_key: str,
+    offset: int,
+    limit: int,
+    start_epoch: int | None = None,
+    end_epoch: int | None = None,
+    name: str | None = None,
+) -> list[JsonDict]:
+    statement = (
+        select(workouts_table.c.payload)
+        .where(
+            workouts_table.c.source == source,
+            workouts_table.c.account_key == account_key,
+        )
+        .order_by(
+            desc(workouts_table.c.start_time_epoch),
+            desc(workouts_table.c.updated_at_epoch),
+            desc(workouts_table.c.id),
+        )
+        .offset(offset)
+        .limit(limit)
+    )
+    statement = _apply_workout_filters(statement, start_epoch=start_epoch, end_epoch=end_epoch, name=name)
+
     with engine.begin() as connection:
-        rows = connection.execute(
-            select(workouts_table.c.payload)
-            .where(
-                workouts_table.c.source == source,
-                workouts_table.c.account_key == account_key,
-            )
-            .order_by(
-                desc(workouts_table.c.start_time_epoch),
-                desc(workouts_table.c.updated_at_epoch),
-                desc(workouts_table.c.id),
-            )
-            .offset(offset)
-            .limit(limit)
-        ).mappings().all()
+        rows = connection.execute(statement).mappings().all()
 
     return [dict(row["payload"]) for row in rows if isinstance(row["payload"], dict)]
+
+
+def _apply_workout_filters(statement: Any, *, start_epoch: int | None, end_epoch: int | None, name: str | None) -> Any:
+    if start_epoch is not None:
+        statement = statement.where(workouts_table.c.start_time_epoch >= start_epoch)
+    if end_epoch is not None:
+        statement = statement.where(workouts_table.c.start_time_epoch < end_epoch)
+    if name:
+        statement = statement.where(workouts_table.c.title.ilike(f"%{name.strip()}%"))
+    return statement
 
 
 def store_workouts(*, source: WorkoutSource, account_key: str, workouts: list[JsonDict]) -> bool:

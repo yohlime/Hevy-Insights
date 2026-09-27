@@ -66,3 +66,4 @@ class HevyWorkoutsResponse(BaseModel):
     page_count: int | None = None
     page_size: int | None = None
     workout_count: int | None = None
+    total_count: int | None = None

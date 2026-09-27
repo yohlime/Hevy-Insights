@@ -10,6 +10,7 @@ from app.schemas.hevy import HevyWorkoutsResponse
 from app.services.demo_data import load_sample_data
 from app.services.workout_cache import (
     api_key_account_key,
+    get_cached_workout_count,
     get_cached_workouts,
     is_workout_sync_complete,
     mark_workout_sync,
@@ -37,6 +38,9 @@ def get_workouts(
     username: str | None = Query(None, description="Filter by username - for OAuth2 mode"),
     page: int = Query(1, ge=1, description="Page number - for api-key mode"),
     page_size: int = Query(DEFAULT_WORKOUT_RESPONSE_LIMIT, ge=1, le=MAX_WORKOUT_RESPONSE_LIMIT, description="Cached workouts per response - for api-key mode"),
+    start_epoch: int | None = Query(None, ge=0, description="Only workouts starting at/after this epoch (seconds)"),
+    end_epoch: int | None = Query(None, ge=0, description="Only workouts starting before this epoch (seconds)"),
+    name: str | None = Query(None, description="Case-insensitive workout title contains filter"),
 ):
     """
     Get paginated workout history.
@@ -70,17 +74,28 @@ def get_workouts(
             ):
                 _sync_api_key_workouts(client=client, account_key=account_key)
 
+            total_count = get_cached_workout_count(
+                source="api_key",
+                account_key=account_key,
+                start_epoch=start_epoch,
+                end_epoch=end_epoch,
+                name=name,
+            )
             cached_workouts = get_cached_workouts(
                 source="api_key",
                 account_key=account_key,
                 offset=page_offset,
                 limit=page_size,
+                start_epoch=start_epoch,
+                end_epoch=end_epoch,
+                name=name,
             )
             workouts = {
                 "workouts": cached_workouts,
                 "page": page,
                 "page_size": page_size,
-                "workout_count": len(cached_workouts),
+                "workout_count": total_count,
+                "total_count": total_count,
             }
         else:
             if not username:
@@ -100,13 +115,24 @@ def get_workouts(
             ):
                 _sync_oauth_workouts(client=client, username=username, account_key=account_key)
 
+            total_count = get_cached_workout_count(
+                source="oauth",
+                account_key=account_key,
+                start_epoch=start_epoch,
+                end_epoch=end_epoch,
+                name=name,
+            )
             workouts = {
                 "workouts": get_cached_workouts(
                     source="oauth",
                     account_key=account_key,
                     offset=offset,
                     limit=limit,
-                )
+                    start_epoch=start_epoch,
+                    end_epoch=end_epoch,
+                    name=name,
+                ),
+                "total_count": total_count,
             }
 
         return workouts
