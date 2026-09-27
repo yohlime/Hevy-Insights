@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@tanstack/vue-query": "^5.104.0",
@@ -26,6 +28,7 @@
     "@vue/tsconfig": "^0.9.1",
     "typescript": "~5.9.3",
     "vite": "^8.2.2",
+    "vitest": "^5.0.2",
     "vue-tsc": "^3.3.11"
   }
 }
