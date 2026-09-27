@@ -206,6 +206,8 @@ export function useWorkoutsView(pageSize = 9, options: UseWorkoutsViewOptions = 
     const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize)));
     const hasMore = computed(() => query.hasNextPage.value === true);
     const loading = computed(() => query.isLoading.value);
+    const isError = computed(() => query.isError.value);
+    const errorMessage = computed(() => (query.error.value as Error | null)?.message ?? null);
     const isFetchingMore = computed(() => query.isFetchingNextPage.value);
 
     const workoutIndexAt = (indexInList: number): number => totalCount.value - indexInList;
@@ -234,6 +236,8 @@ export function useWorkoutsView(pageSize = 9, options: UseWorkoutsViewOptions = 
       hasMore,
       hasPrev: computed(() => false),
       loading,
+      isError,
+      errorMessage,
       isFetchingMore,
       load,
       loadMore,
@@ -258,6 +262,8 @@ export function useWorkoutsView(pageSize = 9, options: UseWorkoutsViewOptions = 
   const hasMore = computed(() => currentPage.value < totalPages.value);
   const hasPrev = computed(() => currentPage.value > 1);
   const loading = computed(() => query.isLoading.value);
+  const isError = computed(() => query.isError.value);
+  const errorMessage = computed(() => (query.error.value as Error | null)?.message ?? null);
 
   const workoutIndexAt = (indexInList: number): number =>
     totalCount.value - ((currentPage.value - 1) * pageSize + indexInList);
@@ -281,6 +287,8 @@ export function useWorkoutsView(pageSize = 9, options: UseWorkoutsViewOptions = 
     hasMore,
     hasPrev,
     loading,
+    isError,
+    errorMessage,
     isFetchingMore: computed(() => false),
     load,
     loadMore: () => Promise.resolve(),

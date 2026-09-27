@@ -10,6 +10,8 @@ const {
   userAccount,
   timeRange,
   loading,
+  isError,
+  errorMessage,
   pageItems,
   totalPages,
   hasMore,
@@ -20,6 +22,7 @@ const {
   firstPage,
   lastPage,
   workoutIndexAt,
+  load,
   totalSets,
   bpmDisplay,
   caloriesDisplay,
@@ -83,6 +86,12 @@ const toggleExercise = (exerciseId: string) => {
     <div v-if="loading" class="loading-container">
       <div class="loading-spinner"></div>
       <p>{{ $t('global.loadingSpinnerText') }}</p>
+    </div>
+
+    <!-- Error state -->
+    <div v-else-if="isError" class="error-container">
+      <p>{{ errorMessage }}</p>
+      <button class="retry-btn" @click="load()">{{ $t('global.sw.retry') }}</button>
     </div>
 
     <div v-else>
@@ -365,6 +374,9 @@ const toggleExercise = (exerciseId: string) => {
 .loading-spinner { width: 48px; height: 48px; border: 4px solid color-mix(in srgb, var(--color-primary, #10b981) 25%, transparent); border-top-color: var(--color-primary, #10b981); border-radius: 50%; animation: spin 0.9s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .loading-container p { color: var(--text-secondary); font-size: 1.1rem; }
+.error-container { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem; gap: 1rem; color: var(--text-secondary); }
+.retry-btn { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.875rem; cursor: pointer; }
+.retry-btn:hover { border-color: var(--color-primary, #10b981); }
 
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
 .card { min-width: 0; display: flex; flex-direction: column; }

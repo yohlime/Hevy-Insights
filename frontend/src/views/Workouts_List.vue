@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { formatDurationFromTimestamps, formatWeight, getWeightUnit, formatPRValue, formatDateTime } from "../utils/formatters";
 import { detectExerciseType, formatDurationSeconds, formatDistance } from "../utils/exerciseTypeDetector";
 import WorkoutsViewToggle from "../components/WorkoutsViewToggle.vue";
 import { useWorkoutsView, type TimeRange } from "../composables/useWorkoutsView";
 
 const route = useRoute();
+const router = useRouter();
 const initialDay = typeof route.query.day === "string" ? route.query.day : undefined;
 
 const {
@@ -19,7 +20,10 @@ const {
   totalCount,
   hasMore,
   loading,
+  isError,
+  errorMessage,
   isFetchingMore,
+  load,
   loadMore,
   workoutIndexAt,
   goToWorkoutNumber,
@@ -65,6 +69,14 @@ const onChangeRange = (event: Event) => {
   timeRange.value = (event.target as HTMLSelectElement).value as TimeRange;
 };
 
+function onClearDayFilter() {
+  clearDayFilter();
+  // Drop the deep-link day param so a refresh doesn't re-apply it.
+  const query = { ...route.query };
+  delete query.day;
+  router.replace({ query });
+}
+
 // Helpers
 const formatDateFull = (timestamp: number) => {
   const d = new Date(timestamp * 1000);
@@ -104,6 +116,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   observer?.disconnect();
   observer = null;
+  if (workoutNameDebounceTimeout) clearTimeout(workoutNameDebounceTimeout);
 });
 
 watch(() => route.query.day, (d) => {
@@ -180,7 +193,7 @@ watch(pageItems, (items) => {
 
       <div v-if="isDayFiltered" class="day-filter-banner">
         <span>{{ $t('workouts.list.dayFilter') }}</span>
-        <button type="button" class="day-filter-clear" @click="clearDayFilter">✕</button>
+        <button type="button" class="day-filter-clear" @click="onClearDayFilter">✕</button>
       </div>
     </div>
 
@@ -193,6 +206,12 @@ watch(pageItems, (items) => {
     <div v-if="loading && pageItems.length === 0" class="loading-container">
       <div class="loading-spinner"></div>
       <p>{{ $t('global.loadingSpinnerText') }}</p>
+    </div>
+
+    <!-- Error state -->
+    <div v-else-if="isError" class="error-container">
+      <p>{{ errorMessage }}</p>
+      <button class="retry-btn" @click="load()">{{ $t('global.sw.retry') }}</button>
     </div>
 
     <div v-else class="list">
@@ -488,6 +507,9 @@ watch(pageItems, (items) => {
   .scroll-sentinel { height: 1px; }
   .loading-more { display: flex; justify-content: center; padding: 1.25rem; }
   .end-of-list { text-align: center; color: var(--text-secondary); font-size: 0.85rem; padding: 1.25rem; }
+  .error-container { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem; gap: 1rem; color: var(--text-secondary); }
+  .retry-btn { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.875rem; cursor: pointer; }
+  .retry-btn:hover { border-color: var(--color-primary, #10b981); }
   .day-filter-banner { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 1rem; padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(59, 130, 246, 0.12); color: #60a5fa; font-size: 0.85rem; }
   .day-filter-clear { background: transparent; border: none; color: inherit; cursor: pointer; font-size: 0.9rem; }
   .top-filters { display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
