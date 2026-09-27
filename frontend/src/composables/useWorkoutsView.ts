@@ -3,18 +3,13 @@ import { useI18n } from "vue-i18n";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/vue-query";
 import { useHevyCache } from "../stores/hevy_cache";
 import { workoutService } from "../services/api";
+import { workoutQueryKeys, type WorkoutFilters } from "./workoutQueryKeys";
 
 export type TimeRange = "all" | "1w" | "1m" | "3m" | "6m" | "12m";
 
 export interface PRItem {
   type: string;
   value: number | string;
-}
-
-interface WorkoutFilters {
-  name?: string;
-  startEpoch: number | null;
-  endEpoch: number | null;
 }
 
 interface WorkoutPage {
@@ -191,7 +186,7 @@ export function useWorkoutsView(pageSize = 9, options: UseWorkoutsViewOptions = 
 
   if (infinite) {
     const query = useInfiniteQuery({
-      queryKey: computed(() => ["workouts", "infinite", filters.value, pageSize]),
+      queryKey: computed(() => workoutQueryKeys.infinite(filters.value, pageSize)),
       queryFn: ({ pageParam }) => fetchWorkoutPage(store, pageParam as number, pageSize, filters.value),
       initialPageParam: 1,
       getNextPageParam: (lastPage, allPages, lastPageParam) => {
@@ -251,7 +246,7 @@ export function useWorkoutsView(pageSize = 9, options: UseWorkoutsViewOptions = 
   }
 
   const query = useQuery({
-    queryKey: computed(() => ["workouts", "page", filters.value, currentPage.value, pageSize]),
+    queryKey: computed(() => workoutQueryKeys.page(filters.value, currentPage.value, pageSize)),
     queryFn: () => fetchWorkoutPage(store, currentPage.value, pageSize, filters.value),
     placeholderData: keepPreviousData,
   });

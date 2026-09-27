@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useHevyCache } from "../stores/hevy_cache";
+import { useAllWorkoutsQuery } from "../composables/useAllWorkouts";
 import { calculateCSVStats, calculatePRsGrouped, calculateMuscleDistribution } from "../utils/csvCalculator";
 import { calculateWorkoutStreakWeeks } from "../utils/streaks";
 import { formatDuration, formatWeight, getWeightUnit, formatPRValue, formatDate, formatMonthYear } from "../utils/formatters";
@@ -40,9 +41,10 @@ const store = useHevyCache();
 const router = useRouter();
 const chartData = ref<any>(null);
 
-const loading = computed(() => store.isLoadingWorkouts || store.isLoadingUser);
+const allWorkoutsQuery = useAllWorkoutsQuery();
+const loading = computed(() => allWorkoutsQuery.isLoading.value || store.isLoadingUser);
 const userAccount = computed(() => store.userAccount);
-const workouts = computed(() => store.workouts);
+const workouts = computed(() => allWorkoutsQuery.data.value ?? []);
 
 // Detect if user is using PRO API Key mode
 const isProApiMode = ref<boolean>(false);
@@ -824,7 +826,7 @@ const navigateToExercise = (localizedTitle: string) => {
 const fetchData = async () => {
   try {
     await store.fetchUserAccount();
-    await store.fetchWorkouts();
+    await allWorkoutsQuery.refetch();
     processChartData();
   } catch (error) {
     console.error("Error fetching data:", error);

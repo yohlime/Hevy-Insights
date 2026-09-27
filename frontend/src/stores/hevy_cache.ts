@@ -91,9 +91,6 @@ export const useHevyCache = defineStore("hevyCache", {
       const fiveMinutes = 5 * 60 * 1000;
       return Date.now() - state.workoutsLastFetched > fiveMinutes;
     },
-    // Prescribed rep target for an exercise template (from routines), if any
-    getRoutineTarget: (state) => (templateId?: string | null): RoutineRepTarget | null =>
-      templateId ? state.routineRepTargets[templateId] ?? null : null,
   },
 
   actions: {

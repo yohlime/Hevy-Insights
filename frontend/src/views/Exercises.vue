@@ -8,6 +8,8 @@ import { Scatter, Bar, Line } from "vue-chartjs";
 import { useI18n } from "vue-i18n";
 import { authService } from "../services/api";
 import { useBodyMeasurementsQuery } from "../composables/useBodyMeasurements";
+import { useAllWorkoutsQuery } from "../composables/useAllWorkouts";
+import { useRoutineTargetsQuery } from "../composables/useRoutineTargets";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -147,7 +149,9 @@ function getLocalizedPRType(prType: string): string {
   return translation;
 }
 
-const allWorkouts = computed(() => store.workouts || []);
+const allWorkoutsQuery = useAllWorkoutsQuery();
+const routineTargetsQuery = useRoutineTargetsQuery(computed(() => authResolved.value && !isUsingProApi.value));
+const allWorkouts = computed(() => allWorkoutsQuery.data.value ?? []);
 
 const trainedExerciseOptions = computed(() => {
   const seen = new Map<string, string>();
@@ -175,22 +179,14 @@ function hasTrainedExerciseOption(value: string): boolean {
 }
 
 onMounted(async () => {
-  await store.fetchWorkouts();
-  
-  // Check auth mode from backend
+  // Check auth mode from backend. The all-workouts / body-measurements /
+  // routine-target queries start automatically; this gates the last two.
   const authStatus = await authService.getAuthStatus();
   isUsingProApi.value = authStatus.auth_mode === "api_key";
   // The body-measurements query is enabled once the auth mode is known
   // (free API only); its watcher populates `userBodyWeight`.
   authResolved.value = true;
 
-  // Load prescribed rep targets from routines (OAuth only; PRO API keys cannot read routines)
-  if (!isUsingProApi.value) {
-    store.fetchRoutineRepTargets().catch(() => {
-      // Routines are optional; the overload engine falls back to inferred targets.
-    });
-  }
-  
   // Load persisted equipment filters (exercise -> selected vendor/all)
   try {
     const saved = localStorage.getItem(SELECTED_EQUIPMENT_STORAGE_KEY);
@@ -524,7 +520,7 @@ const exercises = computed(() => {
     ex.lastTrainedDate = days.length > 0 ? days[days.length - 1] : null;
     
     // Progressive overload state + recommendation (exposure-based, multi-signal)
-    const routineTarget = store.getRoutineTarget(ex.templateId);
+    const routineTarget = routineTargetsQuery.data.value?.[ex.templateId] ?? null;
     ex.overload = analyzeProgression(ex.byDay, {
       sessions: store.plateauDetectionSessions,
       sets: ex.sets,

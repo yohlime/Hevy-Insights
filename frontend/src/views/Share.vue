@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useHevyCache } from "../stores/hevy_cache";
+import { useAllWorkoutsQuery } from "../composables/useAllWorkouts";
 import { calculateCSVStats } from "../utils/csvCalculator";
 import { calculateWorkoutStreakWeeks } from "../utils/streaks";
 import { getWeightUnit } from "../utils/formatters";
@@ -12,9 +13,10 @@ const { t } = useI18n();
 const store = useHevyCache();
 const router = useRouter();
 
+const allWorkoutsQuery = useAllWorkoutsQuery();
 const userAccount = computed(() => store.userAccount);
-const workouts = computed(() => store.workouts);
-const loading = computed(() => store.isLoadingWorkouts || store.isLoadingUser);
+const workouts = computed(() => allWorkoutsQuery.data.value ?? []);
+const loading = computed(() => allWorkoutsQuery.isLoading.value || store.isLoadingUser);
 
 // CSV mode stats calculation - Match Dashboard.vue
 const csvStats = computed(() => {
@@ -214,7 +216,7 @@ const downloadCard = async () => {
 };
 
 const fetchData = async () => {
-  await store.fetchWorkouts();
+  await allWorkoutsQuery.refetch();
   await store.fetchUserAccount();
   // Initialize selectedYear with the most recent year from available years
   if (availableYears.value.length > 0) {
