@@ -35,7 +35,7 @@
     npm --version
     echo "Browser: playwright install chromium"
     echo "Frontend: npm --prefix frontend ci"
-    echo "Run API:  uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 5000"
+    echo "Run API:  uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 5000 --reload --reload-dir backend"
     echo "Run UI:   npm --prefix frontend run dev -- --host 127.0.0.1 --port 5173"
     echo "Run both: devenv tasks run dev:all"
   '';
@@ -44,7 +44,7 @@
   tasks = {
     "playwright:backend".exec = ".devenv/state/venv/bin/playwright install chromium";
     "dev:backend".exec =
-      ".devenv/state/venv/bin/uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 5000";
+      ".devenv/state/venv/bin/uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 5000 --reload --reload-dir backend";
     "lint:backend".exec = ".devenv/state/venv/bin/ruff check backend";
     "check:backend".exec = ''
       .devenv/state/venv/bin/ruff check backend
@@ -92,7 +92,7 @@
       require_port_free 5000 "Backend"
       require_port_free 5173 "Frontend"
 
-      setsid .devenv/state/venv/bin/uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 5000 &
+      setsid .devenv/state/venv/bin/uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 5000 --reload --reload-dir backend &
       backend_pid=$!
 
       if [ ! -d frontend/node_modules ]; then
