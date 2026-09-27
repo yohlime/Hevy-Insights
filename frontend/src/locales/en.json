@@ -460,7 +460,13 @@
       "lower_back": "Lower Back",
       "quadriceps": "Quadriceps",
       "triceps": "Triceps",
-      "upper_back": "Upper Back"
+      "upper_back": "Upper Back",
+      "forearms": "Forearms",
+      "traps": "Traps",
+      "neck": "Neck",
+      "full_body": "Full Body",
+      "other": "Other",
+      "cardio": "Cardio"
     },
     "pagination": {
       "first": "First",

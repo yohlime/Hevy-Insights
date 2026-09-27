@@ -460,7 +460,13 @@
       "lower_back": "Lumbar",
       "quadriceps": "Cuádriceps",
       "triceps": "Tríceps",
-      "upper_back": "Espalda Superior"
+      "upper_back": "Espalda Superior",
+      "forearms": "Antebrazos",
+      "traps": "Trapecios",
+      "neck": "Cuello",
+      "full_body": "Cuerpo completo",
+      "other": "Otros",
+      "cardio": "Cardio"
     },
     "pagination": {
       "first": "Primero",

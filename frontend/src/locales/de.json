@@ -460,7 +460,13 @@
       "lower_back": "Unterer Rücken",
       "quadriceps": "Quadrizeps",
       "triceps": "Trizeps",
-      "upper_back": "Oberer Rücken"
+      "upper_back": "Oberer Rücken",
+      "forearms": "Unterarme",
+      "traps": "Trapezmuskel",
+      "neck": "Hals",
+      "full_body": "Ganzkörper",
+      "other": "Sonstige",
+      "cardio": "Cardio"
     },
     "pagination": {
       "first": "Erste",
