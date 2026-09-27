@@ -19,6 +19,7 @@ import {
   BarElement,
   ArcElement,
   RadialLinearScale,
+  Filler,
   Title,
   Tooltip,
   Legend,
@@ -32,6 +33,7 @@ ChartJS.register(
   BarElement,
   ArcElement,
   RadialLinearScale,
+  Filler,
   Title,
   Tooltip,
   Legend
