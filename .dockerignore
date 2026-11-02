@@ -1,6 +1,8 @@
 .git
+.devenv
 .direnv
 .env
+.github
 .ruff_cache
 .venv
 **/.venv
@@ -9,7 +11,10 @@ venv
 __pycache__
 **/__pycache__
 *.py[cod]
+*.bak
 frontend/node_modules
 frontend/dist
 backend/data
 backend/sample_data
+backend/kulala
+backend/tests
