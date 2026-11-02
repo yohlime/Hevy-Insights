@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSession } from "../stores/session";
 import { usePreferences } from "../stores/preferences";
-import { authService } from "../services/api";
+import { authService, mcpService } from "../services/api";
 
 const store = useSession();
 const preferences = usePreferences();
@@ -12,6 +12,33 @@ const userAccount = computed(() => store.userAccount);
 const dataSource = computed(() => store.dataSource);
 const authMode = ref<string | null>(null);
 const isUsingApiKey = computed(() => authMode.value === "api_key");
+const mcpToken = ref<{ mode: string; token: string; header: string; value: string } | null>(null);
+const mcpCopied = ref(false);
+
+const loadMcpToken = async () => {
+  try {
+    mcpToken.value = await mcpService.getToken();
+  } catch (error) {
+    console.error("Failed to load MCP token:", error);
+  }
+};
+
+const copyMcpToken = async () => {
+  if (!mcpToken.value) {
+    await loadMcpToken();
+  }
+  if (!mcpToken.value) return;
+
+  try {
+    await navigator.clipboard.writeText(mcpToken.value.value);
+    mcpCopied.value = true;
+    setTimeout(() => {
+      mcpCopied.value = false;
+    }, 2000);
+  } catch (error) {
+    console.error("Failed to copy MCP token:", error);
+  }
+};
 
 // Color theme presets
 const colorThemes = [
@@ -69,6 +96,7 @@ onMounted(async () => {
   // Check authentication mode from backend
   const authStatus = await authService.getAuthStatus();
   authMode.value = authStatus.auth_mode;
+  await loadMcpToken();
 });
 
 // Language settings
@@ -377,6 +405,27 @@ const resetSettings = () => {
             <p v-if="dataSource === 'csv'" class="data-note">
               {{ t('settings.dataManagement.csvNote') }}
             </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- MCP Server Section -->
+      <div v-if="dataSource !== 'csv'" class="settings-row">
+        <div class="settings-section full-width">
+          <div class="section-header">
+            <h2>🔌 {{ t('settings.mcp.title') }}</h2>
+            <p class="section-description">{{ t('settings.mcp.description') }}</p>
+          </div>
+
+          <div class="data-info-card">
+            <div class="data-info-row">
+              <span class="data-label">{{ t('settings.mcp.mode') }}</span>
+              <span class="data-value">{{ mcpToken?.mode === 'api_key' ? 'Hevy PRO API' : 'Hevy OAuth' }}</span>
+            </div>
+            <p class="data-note">{{ t('settings.mcp.hint') }}</p>
+            <button class="btn-secondary" @click="copyMcpToken" :disabled="!mcpToken">
+              {{ mcpCopied ? t('settings.mcp.copied') : t('settings.mcp.copy') }}
+            </button>
           </div>
         </div>
       </div>
@@ -960,6 +1009,10 @@ const resetSettings = () => {
   color: #9dd7e5;
   font-size: 0.875rem;
   line-height: 1.5;
+}
+
+.data-info-card .btn-secondary {
+  margin-top: 0.75rem;
 }
 
 /* Update Check Toggle */

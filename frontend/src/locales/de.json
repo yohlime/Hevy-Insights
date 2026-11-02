@@ -369,6 +369,14 @@
       "dataSource": "Datenquelle",
       "csvNote": "Du nutzt den CSV-Modus. Daten werden lokal gespeichert, keine API-Nutzung."
     },
+    "mcp": {
+      "title": "MCP-Server",
+      "description": "Verbinde einen KI-Assistenten mit deinen Hevy-Daten.",
+      "mode": "Anmeldedaten",
+      "hint": "Kopiere diese Anmeldedaten für den /mcp-Endpunkt: OAuth-Sitzungen senden `Authorization: Bearer <token>`, PRO-Schlüssel senden `api-key: <key>`.",
+      "copy": "MCP-Token kopieren",
+      "copied": "Kopiert!"
+    },
     "resetButton": "Auf Standard zurücksetzen",
     "saveButton": "Speichern & zum Dashboard"
   },

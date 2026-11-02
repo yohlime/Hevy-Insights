@@ -5,6 +5,7 @@ import {
   bodyMeasurementResponseSchema,
   bodyMeasurementsSchema,
   loginResponseSchema,
+  mcpTokenResponseSchema,
   routineDetailResponseSchema,
   routineFolderMutationResponseSchema,
   routineFolderResponseSchema,
@@ -80,6 +81,14 @@ export const authService = {
         auth_mode: null,
       };
     }
+  },
+};
+
+// MCP Service
+export const mcpService = {
+  async getToken(): Promise<any> {
+    const response = await api.get("/mcp/token");
+    return parseApiResponse(mcpTokenResponseSchema, response.data, "/mcp/token");
   },
 };
 

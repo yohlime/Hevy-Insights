@@ -369,6 +369,14 @@
       "dataSource": "Origen de Datos",
       "csvNote": "Estás usando el modo CSV. Los datos se guardan localmente, sin API."
     },
+    "mcp": {
+      "title": "Servidor MCP",
+      "description": "Conecta un asistente de IA a tus datos de Hevy.",
+      "mode": "Credencial",
+      "hint": "Copia esta credencial para el endpoint /mcp: las sesiones OAuth envían `Authorization: Bearer <token>` y las claves PRO envían `api-key: <key>`.",
+      "copy": "Copiar token MCP",
+      "copied": "¡Copiado!"
+    },
     "resetButton": "Restablecer valores",
     "saveButton": "Guardar y volver al Panel"
   },

@@ -24,6 +24,13 @@ export const authStatusResponseSchema = z.object({
   auth_mode: z.enum(["oauth2", "api_key", "csv"]).nullable(),
 }).catchall(z.unknown());
 
+export const mcpTokenResponseSchema = z.object({
+  mode: z.enum(["oauth", "api_key"]),
+  token: z.string(),
+  header: z.string(),
+  value: z.string(),
+}).catchall(z.unknown());
+
 export const userAccountSchema = z.object({
   id: z.union([z.string(), z.number()]).optional(),
   username: nullableStringSchema,
