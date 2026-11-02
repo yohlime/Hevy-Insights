@@ -252,6 +252,7 @@ hevy-insights/
 │   │   ├── clients/           # Hevy API and reCAPTCHA clients
 │   │   ├── core/              # Settings, database, logging, rate limiting, security helpers
 │   │   ├── db/                # SQLAlchemy tables and Alembic migrations
+│   │   ├── mcp/               # MCP server (hevy-mcp-compatible tools, resources, prompts)
 │   │   ├── schemas/           # Pydantic schemas and Hevy API DTOs
 │   │   ├── services/          # Demo data and version-check services
 │   │   └── main.py            # FastAPI app factory and ASGI app
@@ -264,8 +265,7 @@ hevy-insights/
     │   │   └── index.ts       # Router entry point
     │   ├── services/          # API communication layer (Axios)
     │   │   └── api.ts         # Axios instance and API functions
-    │   ├── stores/            # Pinia store for state management
-    │   │   └── hevy_cache.ts  # Hevy data caching
+    │   ├── stores/            # Pinia stores (session, preferences, equipment)
     │   ├── utils/             # Utility functions
     │   │   ├── csvCalculator.ts  # CSV data calculation 
     │   │   ├── csvParser.ts   # CSV data parsing
@@ -287,6 +287,42 @@ hevy-insights/
     └── vite.config.ts         # Vite build configuration
 ```
 
+## MCP Server
+
+The backend exposes a [Model Context Protocol](https://modelcontextprotocol.io/) server at `/mcp` using Streamable HTTP. It mirrors the tool surface of [`chrisdoc/hevy-mcp`](https://github.com/chrisdoc/hevy-mcp): 23 tools, 4 resources, and 2 prompts covering workouts, routines, routine folders, exercise templates, exercise history, body measurements, and training summaries.
+
+Authentication supports both account types:
+
+- **Free OAuth account (no Hevy PRO):** send the web session id as a bearer token. While logged into Hevy Insights, open **Settings → MCP Server → Copy MCP token**, or call `GET /api/mcp/token`, or copy the `hevy_session_id` cookie from the browser.
+- **Hevy PRO API key:** send it as `api-key: <key>` or `Authorization: Bearer <key>`.
+
+```json
+{
+  "mcpServers": {
+    "hevy-insights": {
+      "url": "http://localhost:5000/mcp",
+      "headers": {
+        "Authorization": "Bearer <hevy_session_id>"
+      }
+    }
+  }
+}
+```
+
+The OAuth path uses Hevy's internal web API. Workouts, routines, routine folders, body measurements, exercise history (derived from workouts), and training summaries work without PRO. PRO-only operations (workout create/update, workout events, exercise-template creation, measurement updates) return a clear "requires a Hevy PRO API key" error. The PRO API-key path supports the full tool set.
+
+The endpoint is stateless and returns JSON responses, so it also works with clients that do not support SSE. Implementation lives in `backend/app/mcp/`; tools, resources, and prompts are registered in `backend/app/mcp/server.py`.
+
+Example with Codex (free OAuth session):
+
+```bash
+# While logged into Hevy Insights, get the token from GET /api/mcp/token
+export HEVY_MCP_TOKEN=your-hevy-session-id
+codex mcp add hevy-insights \
+  --url http://localhost:5000/mcp \
+  --bearer-token-env-var HEVY_MCP_TOKEN
+```
+
 ## High-Level-Flow
 
 - **index.html**: Browser loads this HTML document first. It defines the root node `<div id="app"></div>` and includes `<script type="module" src="/src/main.ts">`.
@@ -294,7 +330,7 @@ hevy-insights/
 - **App.vue**: Root component renders the global shell (fixed sidebar + main). On mount and after each route change it checks `localStorage` for `hevy_access_token` to toggle sidebar visibility and protect routes.
 - **Router**: Resolves the current URL (`/login`, `/dashboard`, `/workouts-card`, `/workouts-list`) and renders the matched view inside `<router-view />`. Auth guards check authentication status from backend via `/api/auth/status` endpoint.
 - **View Components**: The matched page component (`Login.vue`, `Dashboard.vue`, `Workouts_Card.vue`, `.....vue`) runs `setup()` and lifecycle hooks (`onMounted`).
-- **Pinia Store** (*frontend/src/stores/hevy_cache.ts*): Centralized state with 5‑minute caching for workouts (`workoutsLastFetched`). Exposes actions `fetchUserAccount()`, `fetchWorkouts(force)` and getters like `username`, `hasWorkouts`. Prevents redundant API calls when navigating.
+- **Pinia Stores** (*frontend/src/stores/*): Focused stores for session state (`session.ts`: user + CSV mode), display/analysis preferences (`preferences.ts`), and per-exercise equipment configs (`equipment.ts`). Server data is fetched and cached by TanStack Query composables instead.
 - **Axios Service** (*frontend/src/services/api.ts*): Configures base URL with `withCredentials: true` for cookie support. Authentication is handled automatically via HttpOnly cookies set by the backend. All frontend API calls to the backend go through these typed helpers.
 - **Backend** (FastAPI): Serves `/api` endpoints. Supports dual authentication (OAuth2 Bearer tokens or PRO API keys) via HttpOnly cookies. Workouts and their exercises are cached lazily in the configured SQLite database, defaulting to `backend/data/hevy.db`; sync fetches from newest to oldest until it reaches an already-stored workout ID, then normalized responses are returned from SQLite. Frontend receives JSON responses and Vue reactivity updates the UI.
 
