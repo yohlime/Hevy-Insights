@@ -488,23 +488,26 @@ class HevyOAuthClient:
             raise HevyError(f"Unexpected error occurred: {e}")
 
     def post_body_measurements(self, date: str, weight_kg: float) -> dict[str, bool]:
+        """Post a weight measurement for a date (OAuth web API)."""
+        return self.post_body_measurement_batch({"date": date, "weight_kg": weight_kg})
+
+    def post_body_measurement_batch(self, measurement: JsonDict) -> dict[str, bool]:
         """
-        Post body measurements to Hevy API.
+        Post a body measurement with any supported fields (OAuth web API).
 
         Args:
-            date: Date of the measurement in ISO 8601 format (YYYY-MM-DD)
-            weight_kg: Weight in kilograms
+            measurement: Measurement fields including the required ``date``.
 
         Raises:
             HevyError: If API request fails
         """
-        logging.debug(f"Posting body measurement: {date=}, {weight_kg=}")
+        logging.debug("Posting body measurement")
 
         if not self.access_token:
             raise HevyError("No access token available. Please login first.")
 
         try:
-            body = {"measurementsBatch": [{"date": date, "weight_kg": weight_kg, "_unsyncedObjectId": "zitronenkuchen"}]}
+            body = {"measurementsBatch": [{**measurement, "_unsyncedObjectId": "zitronenkuchen"}]}
 
             response = self.session.post(f"{self.config.body_measurements_url}_batch", json=body, timeout=30)
             response.raise_for_status()

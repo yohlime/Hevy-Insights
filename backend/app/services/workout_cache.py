@@ -86,6 +86,22 @@ def get_cached_workouts(
     return [dict(row["payload"]) for row in rows if isinstance(row["payload"], dict)]
 
 
+def get_cached_workout(*, source: WorkoutSource, account_key: str, workout_id: str) -> JsonDict | None:
+    """Return one cached workout payload by ID, if present."""
+    statement = select(workouts_table.c.payload).where(
+        workouts_table.c.source == source,
+        workouts_table.c.account_key == account_key,
+        workouts_table.c.id == workout_id,
+    )
+
+    with engine.begin() as connection:
+        row = connection.execute(statement).mappings().one_or_none()
+
+    if row and isinstance(row["payload"], dict):
+        return dict(row["payload"])
+    return None
+
+
 def _apply_workout_filters(statement: Any, *, start_epoch: int | None, end_epoch: int | None, name: str | None) -> Any:
     if start_epoch is not None:
         statement = statement.where(workouts_table.c.start_time_epoch >= start_epoch)

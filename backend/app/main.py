@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from typing import Any, cast
 
 from fastapi import FastAPI
@@ -10,17 +11,29 @@ from app.core.config import settings
 from app.core.database import run_migrations
 from app.core.logging import setup_logging
 from app.core.rate_limit import limiter
+from app.mcp.auth import McpTrailingSlashMiddleware
+from app.mcp.server import create_mcp_app
 
 
 def create_app() -> FastAPI:
     setup_logging()
     run_migrations()
 
+    mcp_app = create_mcp_app()
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        # Starlette does not run mounted sub-app lifespans, so start the MCP
+        # streamable-HTTP session manager explicitly.
+        async with mcp_app.router.lifespan_context(mcp_app):
+            yield
+
     app = FastAPI(
         title="Hevy Insights API",
         description="Backend API for Hevy Insights",
         version="1.5.2",
         docs_url="/api/docs",
+        lifespan=lifespan,
     )
 
     app.state.limiter = limiter
@@ -33,8 +46,10 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["*"],
     )
+    app.add_middleware(McpTrailingSlashMiddleware)
 
     app.include_router(api_router)
+    app.mount("/mcp", mcp_app)
     return app
 
 
